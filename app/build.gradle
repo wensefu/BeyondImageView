@@ -5,7 +5,7 @@ android {
     buildToolsVersion "25.0.2"
 
     defaultConfig {
-        applicationId "com.beyondsw.customview"
+        applicationId "com.beyondsw.fastimages.demo"
         minSdkVersion 14
         targetSdkVersion 24
         versionCode 1
