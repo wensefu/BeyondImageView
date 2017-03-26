@@ -6,19 +6,4 @@
    >
 
 
-    <!--<com.beyondsw.customview.ColorFilterView-->
-        <!--android:layout_width="match_parent"-->
-        <!--android:layout_height="match_parent"-->
-        <!--android:layout_gravity="center"-->
-        <!--/>-->
-
-    <com.beyondsw.demo.XfermodeView
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_gravity="center"
-        />
-
-    <!--<com.beyondsw.customview.EraserView-->
-        <!--android:layout_width="match_parent"-->
-        <!--android:layout_height="match_parent"/>-->
 </FrameLayout>
