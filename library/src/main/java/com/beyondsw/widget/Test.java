@@ -1,4 +1,4 @@
-package com.beyondsw.fastimages;
+package com.beyondsw.widget;
 
 /**
  * Created by wensefu on 17-3-27.
