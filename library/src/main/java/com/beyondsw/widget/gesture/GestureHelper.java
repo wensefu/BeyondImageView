@@ -16,14 +16,19 @@ public class GestureHelper {
 
     public interface Listener {
         void onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY);
+
         void onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY);
+
         void onDoubleTap(MotionEvent e);
-        void onScaleBegin();
-        void onScale(float px,float py,float factor);
-        void onScaleEnd();
+
+        void onScaleBegin(float px, float py);
+
+        void onScale(float px, float py, float factor);
+
+        void onScaleEnd(float px, float py);
     }
 
-    public GestureHelper(Context context,Listener listener) {
+    public GestureHelper(Context context, Listener listener) {
         mListener = listener;
         mGesture = new GestureDetector(context, mGestureListener);
         mGesture.setOnDoubleTapListener(mDoubleTabListener);
@@ -33,6 +38,8 @@ public class GestureHelper {
     public boolean onTouchEvent(MotionEvent event) {
         mGesture.onTouchEvent(event);
         mScaleGesture.onTouchEvent(event);
+//        final int action = event.getAction()&MotionEvent.ACTION_MASK;
+//        if(action==MotionEvent.ACTION_POINTER_UP)
         return true;
     }
 
@@ -54,8 +61,8 @@ public class GestureHelper {
 
         @Override
         public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
-             mListener.onScroll(e1, e2, distanceX, distanceY);
-             return true;
+            mListener.onScroll(e1, e2, -distanceX, -distanceY);
+            return true;
         }
 
         @Override
@@ -65,7 +72,7 @@ public class GestureHelper {
 
         @Override
         public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-             mListener.onFling(e1, e2, velocityX, velocityY);
+            mListener.onFling(e1, e2, velocityX, velocityY);
             return true;
         }
     };
@@ -97,13 +104,13 @@ public class GestureHelper {
 
         @Override
         public boolean onScaleBegin(ScaleGestureDetector detector) {
-            mListener.onScaleBegin();
+            mListener.onScaleBegin(detector.getFocusX(), detector.getFocusY());
             return true;
         }
 
         @Override
         public void onScaleEnd(ScaleGestureDetector detector) {
-            mListener.onScaleEnd();
+            mListener.onScaleEnd(detector.getFocusX(), detector.getFocusY());
         }
     };
 }

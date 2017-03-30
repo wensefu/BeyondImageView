@@ -8,6 +8,7 @@
     <com.beyondsw.widget.BeyondImageView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:src="@drawable/test2"
+        android:src="@drawable/test"
+        android:background="#333333"
         />
 </FrameLayout>

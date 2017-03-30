@@ -20,13 +20,16 @@ public class BeyondImageView extends ImageView {
 
     private static final String TAG = "BeyondImageView";
     private static final boolean LOG_ENABLE = true;
-    private static final float SCALE_FACTOR = 2.5f;
-    private float mScaleFactor = 1f;
+    private static final float MAX_SCALE = 2.5f;
     private GestureHelper mGestureHelper;
     private Matrix mMatrix;
     private boolean mScaling;
-    private float mPx;
-    private float mPy;
+    private ValueAnimator mDoubleTabScaleAnimator;
+    private float[] mValues;
+    private float mScale = 1f;
+    private float mScaleBeginPx;
+    private float mScaleBeginPy;
+
 
     public BeyondImageView(Context context) {
         this(context, null);
@@ -39,12 +42,19 @@ public class BeyondImageView extends ImageView {
 
     private void init() {
         mMatrix = new Matrix();
+        mValues = new float[9];
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         canvas.concat(mMatrix);
         super.onDraw(canvas);
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        super.onLayout(changed, left, top, right, bottom);
+        log(TAG, "onLayout");
     }
 
     @Override
@@ -57,39 +67,88 @@ public class BeyondImageView extends ImageView {
         return mGestureHelper.onTouchEvent(event);
     }
 
-    private void doDoubleTabScale(float x,final float y) {
+    private void onGestureScaleBegin(float px, float py) {
+        mScaleBeginPx = px;
+        mScaleBeginPy = py;
+        if (mDoubleTabScaleAnimator != null && mDoubleTabScaleAnimator.isRunning()) {
+            mDoubleTabScaleAnimator.cancel();
+        }
+    }
+
+    private void onGestureScale(float px, float py, float factor) {
+        mMatrix.postScale(factor, factor, px, py);
+        invalidate();
+        mScale *= factor;
+    }
+
+    private void onGestureScaleEnd(float px, float py) {
+        if (mScale > MAX_SCALE) {
+            doScaleAnim(mScaleBeginPx, mScaleBeginPy, MAX_SCALE);
+        } else if (mScale < 1) {
+            animToInitPosition();
+        }
+    }
+
+    private void doScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
+        if (mScale == 1) {
+            return;
+        }
+        mMatrix.postTranslate(distanceX, distanceY);
+        invalidate();
+    }
+
+    private void printMatrix() {
+        mMatrix.getValues(mValues);
+        log(TAG, "----------------------------");
+        log(TAG, "mMatrix.scaleX=" + mValues[Matrix.MSCALE_X]);
+        log(TAG, "mMatrix.scaleY=" + mValues[Matrix.MSCALE_Y]);
+        log(TAG, "mMatrix.tx=" + mValues[Matrix.MTRANS_X]);
+        log(TAG, "mMatrix.ty=" + mValues[Matrix.MTRANS_Y]);
+        log(TAG, "mMatrix.sx=" + mValues[Matrix.MSKEW_X]);
+        log(TAG, "mMatrix.sy=" + mValues[Matrix.MSKEW_Y]);
+        log(TAG, "#############################");
+    }
+
+    private void doScaleAnim(final float px, final float py, float toScale) {
+        mDoubleTabScaleAnimator = ValueAnimator.ofFloat(mScale, toScale).setDuration(200);
+        mDoubleTabScaleAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                float value = (float) animation.getAnimatedValue();
+                float radioScale = value / mScale;
+                mMatrix.postScale(radioScale, radioScale, px, py);
+                invalidate();
+                mScale = value;
+            }
+        });
+        mDoubleTabScaleAnimator.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                mScaling = false;
+            }
+        });
+        mDoubleTabScaleAnimator.start();
+    }
+
+    private void animToInitPosition() {
+        mMatrix.getValues(mValues);
+        float tx = mValues[Matrix.MTRANS_X];
+        float ty = mValues[Matrix.MTRANS_Y];
+        float px = tx / (1 - mScale);
+        float py = ty / (1 - mScale);
+        doScaleAnim(px, py, 1);
+    }
+
+    private void doDoubleTabScale(float x, final float y) {
         if (mScaling) {
             return;
         }
         mScaling = true;
-        final boolean scaleBigger = Float.compare(mScaleFactor, 1) == 0;
-        final float targetScale = scaleBigger ? SCALE_FACTOR : 1f;
-        final float px;
-        final float py;
-        if (scaleBigger) {
-            mPx = px = x;
-            mPy = py = y;
+        if (mScale == 1) {
+            doScaleAnim(x, y, MAX_SCALE);
         } else {
-            px = mPx;
-            py = mPy;
+            animToInitPosition();
         }
-        final ValueAnimator animator = ValueAnimator.ofFloat(mScaleFactor, targetScale).setDuration(200);
-        animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-            @Override
-            public void onAnimationUpdate(ValueAnimator animation) {
-                float value = (float)animation.getAnimatedValue();
-                mMatrix.setScale(value, value, px, py);
-                invalidate();
-            }
-        });
-        animator.addListener(new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationEnd(Animator animation) {
-                mScaleFactor = targetScale;
-                mScaling = false;
-            }
-        });
-        animator.start();
     }
 
     private GestureHelper.Listener getGestureListener() {
@@ -98,6 +157,7 @@ public class BeyondImageView extends ImageView {
             @Override
             public void onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
                 log(TAG, "onScroll: distanceX=" + distanceX + ",distanceY=" + distanceY);
+                doScroll(e1, e2, distanceX, distanceY);
             }
 
             @Override
@@ -112,18 +172,21 @@ public class BeyondImageView extends ImageView {
             }
 
             @Override
-            public void onScaleBegin() {
+            public void onScaleBegin(float px, float py) {
                 log(TAG, "onScaleBegin");
+                onGestureScaleBegin(px, py);
             }
 
             @Override
             public void onScale(float px, float py, float factor) {
-                log(TAG, "onScaleBegin");
+                log(TAG, "onScale,px=" + px + ",py=" + py + ",factor=" + factor);
+                onGestureScale(px, py, factor);
             }
 
             @Override
-            public void onScaleEnd() {
+            public void onScaleEnd(float px, float py) {
                 log(TAG, "onScaleEnd");
+                onGestureScaleEnd(px, py);
             }
         };
     }
