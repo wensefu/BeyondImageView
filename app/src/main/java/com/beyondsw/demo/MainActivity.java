@@ -1,6 +1,7 @@
 package com.beyondsw.demo;
 
 import android.graphics.Matrix;
+import android.graphics.RectF;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
@@ -14,15 +15,13 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
+        RectF rect = new RectF(0,0,100,100);
+        RectF rect2 = new RectF();
         Matrix matrix = new Matrix();
-        printMatrix("ori",matrix);
-        matrix.postScale(2,2,10,10);
-        printMatrix("scale2",matrix);
-        matrix.postTranslate(40,40);
-        printMatrix("postTranslate",matrix);
-        matrix.postScale(2,2,10,10);
-        printMatrix("scale4",matrix);
+        matrix.postScale(2,2);
+        matrix.postTranslate(20,20);
+        matrix.mapRect(rect2,rect);
+        Log.d(TAG, "onCreate: rect=" + rect2);
     }
 
     private void printMatrix(String tag,Matrix matrix){

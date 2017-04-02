@@ -61,7 +61,7 @@ public class GestureHelper {
 
         @Override
         public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
-            mListener.onScroll(e1, e2, -distanceX, -distanceY);
+            mListener.onScroll(e1, e2, distanceX, distanceY);
             return true;
         }
 

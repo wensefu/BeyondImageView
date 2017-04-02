@@ -6,6 +6,8 @@ import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
+import android.graphics.RectF;
+import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -29,7 +31,8 @@ public class BeyondImageView extends ImageView {
     private float mScale = 1f;
     private float mScaleBeginPx;
     private float mScaleBeginPy;
-
+    private RectF mInitRect = new RectF();
+    private RectF mTempRect = new RectF();
 
     public BeyondImageView(Context context) {
         this(context, null);
@@ -54,7 +57,17 @@ public class BeyondImageView extends ImageView {
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
-        log(TAG, "onLayout");
+        Drawable drawable = getDrawable();
+        if (drawable != null) {
+            mInitRect.set(drawable.getBounds());
+            log(TAG,"onLayout,drawable.getBounds="+drawable.getBounds());
+            log(TAG,"onLayout,before map mInitRect="+mInitRect);
+            Matrix matrix = getImageMatrix();
+            if (matrix != null) {
+                matrix.mapRect(mInitRect);
+                log(TAG,"onLayout,after map mInitRect="+mInitRect);
+            }
+        }
     }
 
     @Override
@@ -93,7 +106,21 @@ public class BeyondImageView extends ImageView {
         if (mScale == 1) {
             return;
         }
-        mMatrix.postTranslate(distanceX, distanceY);
+        mMatrix.postTranslate(-distanceX, -distanceY);
+        mMatrix.mapRect(mTempRect, mInitRect);
+        log(TAG, "mTempRect=" + mTempRect + ",mInitRect=" + mInitRect);
+        if (mTempRect.left > 0) {
+            mMatrix.postTranslate(-mTempRect.left, 0);
+        }
+        if (mTempRect.top > 0) {
+            mMatrix.postTranslate(0, -mTempRect.top);
+        }
+        if (mTempRect.right < getWidth()) {
+            mMatrix.postTranslate(getWidth() - mTempRect.right, 0);
+        }
+        if (mTempRect.bottom < getHeight()) {
+            mMatrix.postTranslate(0, getHeight() - mTempRect.bottom);
+        }
         invalidate();
     }
 
@@ -156,13 +183,11 @@ public class BeyondImageView extends ImageView {
 
             @Override
             public void onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
-                log(TAG, "onScroll: distanceX=" + distanceX + ",distanceY=" + distanceY);
                 doScroll(e1, e2, distanceX, distanceY);
             }
 
             @Override
             public void onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-                log(TAG, "onFling: distanceX=" + velocityX + ",velocityY=" + velocityY);
             }
 
             @Override
