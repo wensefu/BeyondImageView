@@ -19,10 +19,10 @@ public class MainActivity extends AppCompatActivity implements Runnable{
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        handler = new Handler();
-        scroller = new OverScroller(this);
-        scroller.fling(0, 0, -300, 3000, 0, -200, 0, 220);
-        handler.post(this);
+//        handler = new Handler();
+//        scroller = new OverScroller(this);
+//        scroller.fling(0, 0, -300, 3000, 0, -200, 0, 220);
+//        handler.post(this);
     }
 
     @Override

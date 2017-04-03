@@ -68,6 +68,7 @@ public class BeyondImageView extends ImageView {
         }
         mMatrix = new Matrix();
         mValues = new float[9];
+        mScroller = new OverScroller(getContext());
     }
 
     @TargetApi(16)
@@ -142,6 +143,7 @@ public class BeyondImageView extends ImageView {
     }
 
     private void onGestureScaleBegin(float px, float py) {
+        mScaling = true;
         mScaleBeginPx = px;
         mScaleBeginPy = py;
         if (mDoubleTabScaleAnimator != null && mDoubleTabScaleAnimator.isRunning()) {
@@ -186,6 +188,7 @@ public class BeyondImageView extends ImageView {
                 int diffX = newX - oldX;
                 int diffY = newY - oldY;
                 if (diffX != 0 || diffY != 0) {
+                    log(TAG, "FlingRunnable,diffX=" + diffX + ",diffY=" + diffY);
                     mMatrix.postTranslate(diffX, diffY);
                     invalidate();
                     oldX = newX;
@@ -202,11 +205,8 @@ public class BeyondImageView extends ImageView {
 
     @TargetApi(16)
     private void doFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-        if (mScale == 1) {
+        if (mScale <= 1) {
             return;
-        }
-        if (mScroller == null) {
-            mScroller = new OverScroller(getContext());
         }
         mMatrix.mapRect(mTempRect, mInitRect);
         int startX = 0;
@@ -238,7 +238,10 @@ public class BeyondImageView extends ImageView {
     }
 
     private void doScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
-        if (mScale == 1) {
+        if (mScale <= 1) {
+            return;
+        }
+        if (mScaling) {
             return;
         }
         mMatrix.postTranslate(-distanceX, -distanceY);
@@ -301,7 +304,7 @@ public class BeyondImageView extends ImageView {
         doScaleAnim(px, py, 1);
     }
 
-    private void doDoubleTabScale(float x, final float y) {
+    private void doDoubleTabScale(float x, float y) {
         if (mScaling) {
             return;
         }
@@ -351,7 +354,6 @@ public class BeyondImageView extends ImageView {
 
             @Override
             public void onScale(float px, float py, float factor) {
-                log(TAG, "onScale,px=" + px + ",py=" + py + ",factor=" + factor);
                 onGestureScale(px, py, factor);
             }
 
