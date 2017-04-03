@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+      xmlns:app="http://schemas.android.com/apk/res-auto"
+    >
+
+    <item android:id="@+id/matrix" android:title="MATRIX" app:showAsAction="never"/>
+    <item android:id="@+id/fit_xy" android:title="FIT_XY" app:showAsAction="never"/>
+    <item android:id="@+id/fit_start" android:title="FIT_START" app:showAsAction="never"/>
+    <item android:id="@+id/fit_center" android:title="FIT_CENTER" app:showAsAction="never"/>
+    <item android:id="@+id/fit_end" android:title="FIT_END" app:showAsAction="never"/>
+    <item android:id="@+id/center" android:title="CENTER" app:showAsAction="never"/>
+    <item android:id="@+id/center_crop" android:title="CENTER_CROP" app:showAsAction="never"/>
+    <item android:id="@+id/center_inside" android:title="CENTER_INSIDE" app:showAsAction="never"/>
+</menu>

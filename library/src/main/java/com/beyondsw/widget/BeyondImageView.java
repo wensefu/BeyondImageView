@@ -7,6 +7,7 @@ import android.annotation.TargetApi;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
@@ -28,6 +29,7 @@ public class BeyondImageView extends ImageView {
     private static final String TAG = "BeyondImageView";
     private static final boolean LOG_ENABLE = true;
     private static final float MAX_SCALE = 2.5f;
+    private static final float DEFAULT_DOUBLE_TAB_SCALE = 1.5f;
     private GestureHelper mGestureHelper;
     private Matrix mMatrix;
     private boolean mScaling;
@@ -40,6 +42,8 @@ public class BeyondImageView extends ImageView {
     private RectF mTempRect = new RectF();
     private boolean mCropToPadding;
     private OverScroller mScroller;
+    private static final int DOUBLE_TAB_SCALE_AUTO = -1;
+    private float mDoubleTabScale = DOUBLE_TAB_SCALE_AUTO;
 
     public BeyondImageView(Context context) {
         this(context, null);
@@ -74,6 +78,13 @@ public class BeyondImageView extends ImageView {
     @TargetApi(16)
     private boolean getCropToPaddingCompat() {
         return Build.VERSION.SDK_INT < 16 ? mCropToPadding : getCropToPadding();
+    }
+
+    public void setDoubleTabScale(float scale) {
+        if (scale <= 1) {
+            return;
+        }
+        mDoubleTabScale = scale;
     }
 
     @TargetApi(16)
@@ -122,13 +133,13 @@ public class BeyondImageView extends ImageView {
         Drawable drawable = getDrawable();
         if (drawable != null) {
             mInitRect.set(drawable.getBounds());
-            log(TAG, "onLayout,drawable.getBounds=" + drawable.getBounds());
-            log(TAG, "onLayout,before map mInitRect=" + mInitRect);
             Matrix matrix = getImageMatrix();
             if (matrix != null) {
                 matrix.mapRect(mInitRect);
-                log(TAG, "onLayout,after map mInitRect=" + mInitRect);
             }
+            mMatrix.reset();
+            mScale = 1;
+            mScaling = false;
         }
     }
 
@@ -304,13 +315,58 @@ public class BeyondImageView extends ImageView {
         doScaleAnim(px, py, 1);
     }
 
+    private Rect getViewRect() {
+        Rect rect = new Rect();
+        int left;
+        int top;
+        int right;
+        int bottom;
+        if (getCropToPaddingCompat()) {
+            left = getPaddingLeft();
+            top = getPaddingTop();
+            right = getWidth() - left - getPaddingRight();
+            bottom = getHeight() - top - getPaddingBottom();
+        } else {
+            left = top = 0;
+            right = getWidth();
+            bottom = getHeight();
+        }
+        rect.set(left, top, right, bottom);
+        return rect;
+    }
+
+    private void doAutoDoubleTabScale(float x, float y) {
+        final float displayWidth = mInitRect.width();
+        final float displayHeight = mInitRect.height();
+        final Rect viewRect = getViewRect();
+        final float viewWidth = viewRect.width();
+        final float viewHeight = viewRect.height();
+        final float radioWidth = viewWidth / displayWidth;
+        final float radioHeight = viewHeight / displayHeight;
+
+        if (radioWidth < radioHeight) {
+            float dCenterY = mInitRect.centerY();
+            float vCenterY = viewRect.centerY();
+            float py = dCenterY < vCenterY ? 0 : (dCenterY == vCenterY ? vCenterY : viewHeight);
+            doScaleAnim(x, py, radioHeight);
+        } else if (radioWidth > radioHeight) {
+            doScaleAnim(viewWidth / 2, y, radioWidth);
+        } else {
+            doScaleAnim(x, y, DEFAULT_DOUBLE_TAB_SCALE);
+        }
+    }
+
     private void doDoubleTabScale(float x, float y) {
         if (mScaling) {
             return;
         }
         mScaling = true;
         if (mScale == 1) {
-            doScaleAnim(x, y, MAX_SCALE);
+            if (mDoubleTabScale == DOUBLE_TAB_SCALE_AUTO) {
+                doAutoDoubleTabScale(x, y);
+            } else {
+                doScaleAnim(x, y, MAX_SCALE);
+            }
         } else {
             animToInitPosition();
         }

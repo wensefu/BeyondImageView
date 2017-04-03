@@ -2,35 +2,63 @@ package com.beyondsw.demo;
 
 import android.graphics.Matrix;
 import android.os.Bundle;
-import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
-import android.widget.OverScroller;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.widget.ImageView;
 
-public class MainActivity extends AppCompatActivity implements Runnable{
+import com.beyondsw.widget.BeyondImageView;
+
+public class MainActivity extends AppCompatActivity{
 
     private static final String TAG = "BeyondImageView";
     private float[] mValues = new float[9];
 
-    OverScroller scroller;
-    Handler handler;
+    private BeyondImageView mImageView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-//        handler = new Handler();
-//        scroller = new OverScroller(this);
-//        scroller.fling(0, 0, -300, 3000, 0, -200, 0, 220);
-//        handler.post(this);
+        mImageView = (BeyondImageView)findViewById(R.id.image);
     }
 
     @Override
-    public void run() {
-        if(scroller.computeScrollOffset()){
-            Log.d(TAG, "run: x=" + scroller.getCurrX() + ",y=" + scroller.getCurrY());
-            handler.post(this);
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu,menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()){
+            case R.id.matrix:
+                mImageView.setScaleType(ImageView.ScaleType.MATRIX);
+                break;
+            case R.id.fit_xy:
+                mImageView.setScaleType(ImageView.ScaleType.FIT_XY);
+                break;
+            case R.id.fit_start:
+                mImageView.setScaleType(ImageView.ScaleType.FIT_START);
+                break;
+            case R.id.fit_center:
+                mImageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                break;
+            case R.id.fit_end:
+                mImageView.setScaleType(ImageView.ScaleType.FIT_END);
+                break;
+            case R.id.center:
+                mImageView.setScaleType(ImageView.ScaleType.CENTER);
+                break;
+            case R.id.center_crop:
+                mImageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                break;
+            case R.id.center_inside:
+                mImageView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+                break;
         }
+        return true;
     }
 
     private void printMatrix(String tag, Matrix matrix){
