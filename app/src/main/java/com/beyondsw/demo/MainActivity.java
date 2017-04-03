@@ -1,30 +1,39 @@
 package com.beyondsw.demo;
 
 import android.graphics.Matrix;
-import android.graphics.RectF;
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.widget.OverScroller;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements Runnable{
 
     private static final String TAG = "BeyondImageView";
     private float[] mValues = new float[9];
+
+    OverScroller scroller;
+    Handler handler;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        RectF rect = new RectF(0,0,100,100);
-        RectF rect2 = new RectF();
-        Matrix matrix = new Matrix();
-        matrix.postScale(2,2);
-        matrix.postTranslate(20,20);
-        matrix.mapRect(rect2,rect);
-        Log.d(TAG, "onCreate: rect=" + rect2);
+        handler = new Handler();
+        scroller = new OverScroller(this);
+        scroller.fling(0, 0, -300, 3000, 0, -200, 0, 220);
+        handler.post(this);
     }
 
-    private void printMatrix(String tag,Matrix matrix){
+    @Override
+    public void run() {
+        if(scroller.computeScrollOffset()){
+            Log.d(TAG, "run: x=" + scroller.getCurrX() + ",y=" + scroller.getCurrY());
+            handler.post(this);
+        }
+    }
+
+    private void printMatrix(String tag, Matrix matrix){
         matrix.getValues(mValues);
         Log.d(TAG,"----------------------------");
         Log.d(TAG, tag + ",mMatrix.scaleX=" + mValues[Matrix.MSCALE_X]);

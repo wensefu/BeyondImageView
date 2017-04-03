@@ -26,6 +26,8 @@ public class GestureHelper {
         void onScale(float px, float py, float factor);
 
         void onScaleEnd(float px, float py);
+
+        void onDown(MotionEvent e);
     }
 
     public GestureHelper(Context context, Listener listener) {
@@ -46,6 +48,7 @@ public class GestureHelper {
     private GestureDetector.OnGestureListener mGestureListener = new GestureDetector.OnGestureListener() {
         @Override
         public boolean onDown(MotionEvent e) {
+            mListener.onDown(e);
             return true;
         }
 
