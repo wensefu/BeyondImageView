@@ -185,7 +185,6 @@ public class BeyondImageView extends ImageView {
                 int newY = mScroller.getCurrY();
                 int diffX = newX - oldX;
                 int diffY = newY - oldY;
-                log(TAG, "oldx=" + oldX + ",newX=" + newX + ",oldy=" + oldY + ",newY=" + newY + ",diffX=" + diffX + ",diffY=" + diffY);
                 if (diffX != 0 || diffY != 0) {
                     mMatrix.postTranslate(diffX, diffY);
                     invalidate();
@@ -209,6 +208,7 @@ public class BeyondImageView extends ImageView {
         if (mScroller == null) {
             mScroller = new OverScroller(getContext());
         }
+        mMatrix.mapRect(mTempRect, mInitRect);
         int startX = 0;
         int startY = 0;
         int minX;
@@ -229,7 +229,6 @@ public class BeyondImageView extends ImageView {
             minY = Math.round(getHeight() - getPaddingTop() - getPaddingBottom() - mTempRect.bottom);
             maxY = 0;
         }
-        log(TAG, "doFling,velocityX=" + velocityX + ",velocityY=" + velocityY + ",minx=" + minX + ",maxX=" + maxX + ",miny=" + minY + ",maxy=" + maxY);
         final Runnable flingRunnable = new FlingRunnable(startX, startY, (int) velocityX, (int) velocityY, minX, maxX, minY, maxY);
         if (Build.VERSION.SDK_INT >= 16) {
             postOnAnimation(flingRunnable);
