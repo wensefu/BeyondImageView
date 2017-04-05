@@ -6,7 +6,9 @@ import android.animation.ValueAnimator;
 import android.annotation.TargetApi;
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Matrix;
+import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
@@ -28,12 +30,14 @@ public class BeyondImageView extends ImageView {
 
     private static final String TAG = "BeyondImageView";
     private static final boolean LOG_ENABLE = true;
-    private static final float MAX_SCALE = 2.5f;
+    private static final float MAX_SCALE = 1.1f;
     private static final float DEFAULT_DOUBLE_TAB_SCALE = 1.5f;
     private GestureHelper mGestureHelper;
     private Matrix mMatrix;
+    private Matrix mTempMatrix;
     private boolean mScaling;
     private ValueAnimator mDoubleTabScaleAnimator;
+    private ValueAnimator mFixTranslationAnimator;
     private float[] mValues;
     private float mScale = 1f;
     private float mScaleBeginPx;
@@ -42,8 +46,6 @@ public class BeyondImageView extends ImageView {
     private RectF mTempRect = new RectF();
     private boolean mCropToPadding;
     private OverScroller mScroller;
-    private static final int DOUBLE_TAB_SCALE_AUTO = -1;
-    private float mDoubleTabScale = DOUBLE_TAB_SCALE_AUTO;
 
     public BeyondImageView(Context context) {
         this(context, null);
@@ -71,8 +73,13 @@ public class BeyondImageView extends ImageView {
             initCropToPadding();
         }
         mMatrix = new Matrix();
+        mTempMatrix = new Matrix();
         mValues = new float[9];
         mScroller = new OverScroller(getContext());
+
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setColor(Color.YELLOW);
+        paint.setStrokeWidth(10);
     }
 
     @TargetApi(16)
@@ -80,16 +87,12 @@ public class BeyondImageView extends ImageView {
         return Build.VERSION.SDK_INT < 16 ? mCropToPadding : getCropToPadding();
     }
 
-    public void setDoubleTabScale(float scale) {
-        if (scale <= 1) {
-            return;
-        }
-        mDoubleTabScale = scale;
-    }
+    Paint paint = new Paint();
 
     @TargetApi(16)
     @Override
     protected void onDraw(Canvas canvas) {
+
         Drawable drawable = getDrawable();
         if (drawable == null) {
             return; // couldn't resolve the URI
@@ -125,6 +128,9 @@ public class BeyondImageView extends ImageView {
             drawable.draw(canvas);
             canvas.restoreToCount(saveCount);
         }
+        if (mInitRect.width() > 0) {
+            canvas.drawRect(mInitRect, paint);
+        }
     }
 
     @Override
@@ -136,6 +142,7 @@ public class BeyondImageView extends ImageView {
             Matrix matrix = getImageMatrix();
             if (matrix != null) {
                 matrix.mapRect(mInitRect);
+                invalidate();
             }
             mMatrix.reset();
             mScale = 1;
@@ -168,11 +175,91 @@ public class BeyondImageView extends ImageView {
         mScale *= factor;
     }
 
+    private void animTranslationToInit() {
+        mMatrix.mapRect(mTempRect, mInitRect);
+        final ScaleType scaleType = getScaleType();
+        final Rect viewRect = getViewRect();
+        float dy;
+        if (scaleType == ScaleType.FIT_START) {
+            dy = viewRect.top - mTempRect.top;
+        } else if (scaleType == ScaleType.FIT_END) {
+            dy = viewRect.bottom - mTempRect.bottom;
+        } else {
+            dy = viewRect.centerY() - mTempRect.centerY();
+        }
+        if (dy != 0) {
+            mFixTranslationAnimator = ValueAnimator.ofFloat(0, dy).setDuration(220);
+            mFixTranslationAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                float t = 0;
+
+                @Override
+                public void onAnimationUpdate(ValueAnimator animation) {
+                    float value = (float) animation.getAnimatedValue();
+                    mMatrix.postTranslate(0, value - t);
+                    invalidate();
+                    t = value;
+                }
+            });
+            mFixTranslationAnimator.start();
+        }
+    }
+
+    private boolean isFillWithImage(RectF rect) {
+        Rect viewRect = getViewRect();
+        return rect.contains(viewRect.left, viewRect.top, viewRect.right, viewRect.bottom);
+    }
+
+    private static float getPivot(float scale, float startT, float endT) {
+        return (endT - scale * startT) / (1 - scale);
+    }
+
     private void onGestureScaleEnd(float px, float py) {
-        if (mScale > MAX_SCALE) {
-            doScaleAnim(mScaleBeginPx, mScaleBeginPy, MAX_SCALE);
-        } else if (mScale < 1) {
+        if (mScale < 1) {
             animToInitPosition();
+        } else if (mScale > MAX_SCALE) {
+            mTempMatrix.set(mMatrix);
+            final float targetScale = MAX_SCALE / mScale;
+            mTempMatrix.postScale(targetScale, targetScale, mScaleBeginPx, mScaleBeginPy);
+            mTempMatrix.mapRect(mTempRect, mInitRect);
+            final Rect viewRect = getViewRect();
+            final boolean fillHorizontal = mTempRect.left <= viewRect.left && mTempRect.right >= viewRect.right;
+            final boolean fillVertical = mTempRect.top <= viewRect.top && mTempRect.bottom >= viewRect.bottom;
+            if (fillHorizontal && fillVertical) {
+                doScaleAnim(mScaleBeginPx, mScaleBeginPy, MAX_SCALE);
+            } else {
+                float dx = 0;
+                float dy = 0;
+                if (!fillHorizontal) {
+                    dx = mInitRect.centerX() - mTempRect.centerX();
+                }
+                if (!fillVertical) {
+                    ScaleType type = getScaleType();
+                    if (type == ScaleType.FIT_START) {
+                        dy = mInitRect.top - mTempRect.top;
+                    } else if (type == ScaleType.FIT_END) {
+                        dy = mInitRect.bottom - mTempRect.bottom;
+                    } else {
+                        dy = mInitRect.centerY() - mTempRect.centerY();
+                    }
+                }
+                px = mScaleBeginPx;
+                mTempMatrix.getValues(mValues);
+                float endTx = mValues[Matrix.MTRANS_X] + dx;
+                float endTy = mValues[Matrix.MTRANS_Y] + dy;
+                mMatrix.getValues(mValues);
+                float startTx = mValues[Matrix.MTRANS_X];
+                float startTy = mValues[Matrix.MTRANS_Y];
+                if (dx != 0) {
+                    px = getPivot(targetScale, startTx, endTx);
+                }
+                py = getPivot(targetScale, startTy, endTy);
+                doScaleAnim(px, py, MAX_SCALE);
+            }
+        } else {
+            mMatrix.mapRect(mTempRect, mInitRect);
+            if (!isFillWithImage(mTempRect)) {
+                animTranslationToInit();
+            }
         }
     }
 
@@ -220,12 +307,15 @@ public class BeyondImageView extends ImageView {
             return;
         }
         mMatrix.mapRect(mTempRect, mInitRect);
+        if (Math.round(mTempRect.width()) == getViewRect().width()) {
+            return;
+        }
         int startX = 0;
         int startY = 0;
-        int minX;
-        int minY;
-        int maxX;
-        int maxY;
+        int minX = 0;
+        int minY = 0;
+        int maxX = 0;
+        int maxY = 0;
         if (velocityX > 0) {
             minX = 0;
             maxX = -Math.round(mTempRect.left);
@@ -255,20 +345,37 @@ public class BeyondImageView extends ImageView {
         if (mScaling) {
             return;
         }
+        mMatrix.mapRect(mTempRect, mInitRect);
+        final ScaleType scaleType = getScaleType();
+        final Rect viewRect = getViewRect();
+        if (scaleType == ScaleType.FIT_START) {
+            if (Math.round(mTempRect.top) == viewRect.top) {
+                distanceY = 0;
+            }
+        } else if (scaleType == ScaleType.FIT_END) {
+            if (Math.round(mTempRect.bottom) == viewRect.bottom) {
+                distanceY = 0;
+            }
+        } else {
+            if (Math.round(mTempRect.centerY()) == viewRect.centerY()) {
+                distanceY = 0;
+            }
+        }
         mMatrix.postTranslate(-distanceX, -distanceY);
         mMatrix.mapRect(mTempRect, mInitRect);
-        log(TAG, "mTempRect=" + mTempRect + ",mInitRect=" + mInitRect);
         if (mTempRect.left > 0) {
             mMatrix.postTranslate(-mTempRect.left, 0);
-        }
-        if (mTempRect.top > 0) {
-            mMatrix.postTranslate(0, -mTempRect.top);
         }
         if (mTempRect.right < getWidth() - getPaddingLeft() - getPaddingRight()) {
             mMatrix.postTranslate(getWidth() - getPaddingLeft() - getPaddingRight() - mTempRect.right, 0);
         }
-        if (mTempRect.bottom < getHeight() - getPaddingTop() - getPaddingBottom()) {
-            mMatrix.postTranslate(0, getHeight() - getPaddingTop() - getPaddingBottom() - mTempRect.bottom);
+        if (distanceY != 0) {
+            if (mTempRect.top > 0) {
+                mMatrix.postTranslate(0, -mTempRect.top);
+            }
+            if (mTempRect.bottom < getHeight() - getPaddingTop() - getPaddingBottom()) {
+                mMatrix.postTranslate(0, getHeight() - getPaddingTop() - getPaddingBottom() - mTempRect.bottom);
+            }
         }
         invalidate();
     }
@@ -344,10 +451,14 @@ public class BeyondImageView extends ImageView {
         final float radioWidth = viewWidth / displayWidth;
         final float radioHeight = viewHeight / displayHeight;
 
+        if (displayWidth < viewWidth) {
+            doScaleAnim(viewRect.centerX(), viewRect.centerY(), radioWidth);
+            return;
+        }
         if (radioWidth < radioHeight) {
             float dCenterY = mInitRect.centerY();
             float vCenterY = viewRect.centerY();
-            float py = dCenterY < vCenterY ? 0 : (dCenterY == vCenterY ? vCenterY : viewHeight);
+            float py = dCenterY < vCenterY ? viewRect.top : (dCenterY == vCenterY ? vCenterY : viewRect.bottom);
             doScaleAnim(x, py, radioHeight);
         } else if (radioWidth > radioHeight) {
             doScaleAnim(viewWidth / 2, y, radioWidth);
@@ -362,11 +473,7 @@ public class BeyondImageView extends ImageView {
         }
         mScaling = true;
         if (mScale == 1) {
-            if (mDoubleTabScale == DOUBLE_TAB_SCALE_AUTO) {
-                doAutoDoubleTabScale(x, y);
-            } else {
-                doScaleAnim(x, y, MAX_SCALE);
-            }
+            doAutoDoubleTabScale(x, y);
         } else {
             animToInitPosition();
         }
@@ -388,12 +495,12 @@ public class BeyondImageView extends ImageView {
 
             @Override
             public void onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
-                doScroll(e1, e2, distanceX, distanceY);
+                //doScroll(e1, e2, distanceX, distanceY);
             }
 
             @Override
             public void onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-                doFling(e1, e2, velocityX, velocityY);
+                //doFling(e1, e2, velocityX, velocityY);
             }
 
             @Override
