@@ -30,7 +30,7 @@ public class BeyondImageView extends ImageView {
 
     private static final String TAG = "BeyondImageView";
     private static final boolean LOG_ENABLE = true;
-    private static final float MAX_SCALE = 1.1f;
+    private static final float MAX_SCALE = 2.5f;
     private static final float DEFAULT_DOUBLE_TAB_SCALE = 1.5f;
     private GestureHelper mGestureHelper;
     private Matrix mMatrix;
@@ -495,12 +495,12 @@ public class BeyondImageView extends ImageView {
 
             @Override
             public void onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
-                //doScroll(e1, e2, distanceX, distanceY);
+                doScroll(e1, e2, distanceX, distanceY);
             }
 
             @Override
             public void onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-                //doFling(e1, e2, velocityX, velocityY);
+                doFling(e1, e2, velocityX, velocityY);
             }
 
             @Override
