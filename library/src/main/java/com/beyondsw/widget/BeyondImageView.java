@@ -15,11 +15,11 @@ import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.view.GestureDetector;
 import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.widget.ImageView;
 import android.widget.OverScroller;
-
-import com.beyondsw.widget.gesture.GestureHelper;
 
 import java.lang.reflect.Field;
 
@@ -34,7 +34,6 @@ public class BeyondImageView extends ImageView {
     private static final float DOUBLE_TAB_SCALE = 2.5f;
     private float mMaxScale = MAX_SCALE;
     private float mDoubleTabScale = DOUBLE_TAB_SCALE;
-    private GestureHelper mGestureHelper;
     private Matrix mMatrix;
     private Matrix mTempMatrix;
     private boolean mScaling;
@@ -48,6 +47,8 @@ public class BeyondImageView extends ImageView {
     private RectF mTempRect = new RectF();
     private boolean mCropToPadding;
     private OverScroller mScroller;
+    private GestureDetector mGestureDetector;
+    private ScaleGestureDetector mScaleGestureDetector;
 
     public BeyondImageView(Context context) {
         this(context, null);
@@ -155,26 +156,15 @@ public class BeyondImageView extends ImageView {
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         if (event.getAction() == MotionEvent.ACTION_DOWN) {
-            if (mGestureHelper == null) {
-                mGestureHelper = new GestureHelper(getContext(), getGestureListener());
+            if (mGestureDetector == null) {
+                GestureCallback callback = new GestureCallback();
+                mGestureDetector = new GestureDetector(getContext(), callback);
+                mScaleGestureDetector = new ScaleGestureDetector(getContext(),callback);
             }
         }
-        return mGestureHelper.onTouchEvent(event);
-    }
-
-    private void onGestureScaleBegin(float px, float py) {
-        mScaling = true;
-        mScaleBeginPx = px;
-        mScaleBeginPy = py;
-        if (mDoubleTabScaleAnimator != null && mDoubleTabScaleAnimator.isRunning()) {
-            mDoubleTabScaleAnimator.cancel();
-        }
-    }
-
-    private void onGestureScale(float px, float py, float factor) {
-        mMatrix.postScale(factor, factor, px, py);
-        invalidate();
-        mScale *= factor;
+        mGestureDetector.onTouchEvent(event);
+        mScaleGestureDetector.onTouchEvent(event);
+        return true;
     }
 
     private void animTranslationToInit() {
@@ -215,56 +205,6 @@ public class BeyondImageView extends ImageView {
         return (endT - scale * startT) / (1 - scale);
     }
 
-    private void onGestureScaleEnd(float px, float py) {
-        if (mScale < 1) {
-            animToInitPosition();
-        } else if (mScale > mMaxScale) {
-            mTempMatrix.set(mMatrix);
-            final float targetScale = mMaxScale / mScale;
-            mTempMatrix.postScale(targetScale, targetScale, mScaleBeginPx, mScaleBeginPy);
-            mTempMatrix.mapRect(mTempRect, mInitRect);
-            final Rect viewRect = getViewRect();
-            final boolean fillHorizontal = mTempRect.left <= viewRect.left && mTempRect.right >= viewRect.right;
-            final boolean fillVertical = mTempRect.top <= viewRect.top && mTempRect.bottom >= viewRect.bottom;
-            if (fillHorizontal && fillVertical) {
-                doScaleAnim(mScaleBeginPx, mScaleBeginPy, mMaxScale);
-            } else {
-                float dx = 0;
-                float dy = 0;
-                if (!fillHorizontal) {
-                    dx = mInitRect.centerX() - mTempRect.centerX();
-                }
-                if (!fillVertical) {
-                    ScaleType type = getScaleType();
-                    if (type == ScaleType.FIT_START) {
-                        dy = mInitRect.top - mTempRect.top;
-                    } else if (type == ScaleType.FIT_END) {
-                        dy = mInitRect.bottom - mTempRect.bottom;
-                    } else {
-                        dy = mInitRect.centerY() - mTempRect.centerY();
-                    }
-                }
-                px = mScaleBeginPx;
-                mTempMatrix.getValues(mValues);
-                float endTx = mValues[Matrix.MTRANS_X] + dx;
-                float endTy = mValues[Matrix.MTRANS_Y] + dy;
-                mMatrix.getValues(mValues);
-                float startTx = mValues[Matrix.MTRANS_X];
-                float startTy = mValues[Matrix.MTRANS_Y];
-                if (dx != 0) {
-                    px = getPivot(targetScale, startTx, endTx);
-                }
-                py = getPivot(targetScale, startTy, endTy);
-                doScaleAnim(px, py, mMaxScale);
-            }
-        } else {
-            mMatrix.mapRect(mTempRect, mInitRect);
-            if (!isFillWithImage(mTempRect)) {
-                animTranslationToInit();
-            }
-        }
-    }
-
     @TargetApi(16)
     private class FlingRunnable implements Runnable {
 
@@ -301,88 +241,6 @@ public class BeyondImageView extends ImageView {
                 }
             }
         }
-    }
-
-    @TargetApi(16)
-    private void doFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-        if (mScale <= 1) {
-            return;
-        }
-        mMatrix.mapRect(mTempRect, mInitRect);
-        if (Math.round(mTempRect.width()) == getViewRect().width()) {
-            return;
-        }
-        int startX = 0;
-        int startY = 0;
-        int minX = 0;
-        int minY = 0;
-        int maxX = 0;
-        int maxY = 0;
-        if (velocityX > 0) {
-            minX = 0;
-            maxX = -Math.round(mTempRect.left);
-        } else {
-            minX = Math.round(getWidth() - getPaddingLeft() - getPaddingRight() - mTempRect.right);
-            maxX = 0;
-        }
-        if (velocityY > 0) {
-            minY = 0;
-            maxY = -Math.round(mTempRect.top);
-        } else {
-            minY = Math.round(getHeight() - getPaddingTop() - getPaddingBottom() - mTempRect.bottom);
-            maxY = 0;
-        }
-        final Runnable flingRunnable = new FlingRunnable(startX, startY, (int) velocityX, (int) velocityY, minX, maxX, minY, maxY);
-        if (Build.VERSION.SDK_INT >= 16) {
-            postOnAnimation(flingRunnable);
-        } else {
-            post(flingRunnable);
-        }
-    }
-
-    private void doScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
-        if (mScale <= 1) {
-            return;
-        }
-        if (mScaling) {
-            return;
-        }
-        mMatrix.postTranslate(-distanceX, -distanceY);
-        invalidate();
-
-//        mMatrix.mapRect(mTempRect, mInitRect);
-//        final ScaleType scaleType = getScaleType();
-//        final Rect viewRect = getViewRect();
-//        if (scaleType == ScaleType.FIT_START) {
-//            if (Math.round(mTempRect.top) == viewRect.top) {
-//                distanceY = 0;
-//            }
-//        } else if (scaleType == ScaleType.FIT_END) {
-//            if (Math.round(mTempRect.bottom) == viewRect.bottom) {
-//                distanceY = 0;
-//            }
-//        } else {
-//            if (Math.round(mTempRect.centerY()) == viewRect.centerY()) {
-//                distanceY = 0;
-//            }
-//        }
-//        mMatrix.postTranslate(-distanceX, -distanceY);
-//        mMatrix.mapRect(mTempRect, mInitRect);
-//        if (mTempRect.left > 0) {
-//            mMatrix.postTranslate(-mTempRect.left, 0);
-//        }
-//        if (mTempRect.right < getWidth() - getPaddingLeft() - getPaddingRight()) {
-//            mMatrix.postTranslate(getWidth() - getPaddingLeft() - getPaddingRight() - mTempRect.right, 0);
-//        }
-//        if (distanceY != 0) {
-//            if (mTempRect.top > 0) {
-//                mMatrix.postTranslate(0, -mTempRect.top);
-//            }
-//            if (mTempRect.bottom < getHeight() - getPaddingTop() - getPaddingBottom()) {
-//                mMatrix.postTranslate(0, getHeight() - getPaddingTop() - getPaddingBottom() - mTempRect.bottom);
-//            }
-//        }
-//        invalidate();
     }
 
     private void printMatrix() {
@@ -504,66 +362,187 @@ public class BeyondImageView extends ImageView {
         return new float[]{px,py};
     }
 
-    private void doDoubleTabScale(float x, float y) {
-        if (mScaling) {
-            return;
+    private class GestureCallback extends GestureDetector.SimpleOnGestureListener implements ScaleGestureDetector.OnScaleGestureListener{
+
+        @Override
+        public boolean onScale(ScaleGestureDetector detector) {
+            float factor = detector.getScaleFactor();
+            mMatrix.postScale(factor, factor, detector.getFocusX(), detector.getFocusY());
+            invalidate();
+            mScale *= factor;
+            return true;
         }
-        mScaling = true;
-        if (mScale == 1) {
-            float[] pivot = getZoomOutPivot(x, y);
-            doScaleAnim(pivot[0], pivot[1], mDoubleTabScale);
-        } else {
-            animToInitPosition();
+
+        @Override
+        public boolean onScaleBegin(ScaleGestureDetector detector) {
+            mScaling = true;
+            mScaleBeginPx = detector.getFocusX();
+            mScaleBeginPy = detector.getFocusY();
+            if (mDoubleTabScaleAnimator != null && mDoubleTabScaleAnimator.isRunning()) {
+                mDoubleTabScaleAnimator.cancel();
+            }
+            return true;
         }
-    }
 
-    private void onGestureDown(MotionEvent e) {
-        if (mScroller != null && !mScroller.isFinished()) {
-            mScroller.forceFinished(true);
+        @Override
+        public void onScaleEnd(ScaleGestureDetector detector) {
+            if (mScale < 1) {
+                animToInitPosition();
+            } else if (mScale > mMaxScale) {
+                float px,py;
+                mTempMatrix.set(mMatrix);
+                final float targetScale = mMaxScale / mScale;
+                mTempMatrix.postScale(targetScale, targetScale, mScaleBeginPx, mScaleBeginPy);
+                mTempMatrix.mapRect(mTempRect, mInitRect);
+                final Rect viewRect = getViewRect();
+                final boolean fillHorizontal = mTempRect.left <= viewRect.left && mTempRect.right >= viewRect.right;
+                final boolean fillVertical = mTempRect.top <= viewRect.top && mTempRect.bottom >= viewRect.bottom;
+                if (fillHorizontal && fillVertical) {
+                    doScaleAnim(mScaleBeginPx, mScaleBeginPy, mMaxScale);
+                } else {
+                    float dx = 0;
+                    float dy = 0;
+                    if (!fillHorizontal) {
+                        dx = mInitRect.centerX() - mTempRect.centerX();
+                    }
+                    if (!fillVertical) {
+                        ScaleType type = getScaleType();
+                        if (type == ScaleType.FIT_START) {
+                            dy = mInitRect.top - mTempRect.top;
+                        } else if (type == ScaleType.FIT_END) {
+                            dy = mInitRect.bottom - mTempRect.bottom;
+                        } else {
+                            dy = mInitRect.centerY() - mTempRect.centerY();
+                        }
+                    }
+                    px = mScaleBeginPx;
+                    mTempMatrix.getValues(mValues);
+                    float endTx = mValues[Matrix.MTRANS_X] + dx;
+                    float endTy = mValues[Matrix.MTRANS_Y] + dy;
+                    mMatrix.getValues(mValues);
+                    float startTx = mValues[Matrix.MTRANS_X];
+                    float startTy = mValues[Matrix.MTRANS_Y];
+                    if (dx != 0) {
+                        px = getPivot(targetScale, startTx, endTx);
+                    }
+                    py = getPivot(targetScale, startTy, endTy);
+                    doScaleAnim(px, py, mMaxScale);
+                }
+            } else {
+                mMatrix.mapRect(mTempRect, mInitRect);
+                if (!isFillWithImage(mTempRect)) {
+                    animTranslationToInit();
+                }
+            }
         }
-    }
 
-    private GestureHelper.Listener getGestureListener() {
-        return new GestureHelper.Listener() {
-
-            @Override
-            public void onDown(MotionEvent e) {
-                onGestureDown(e);
+        @Override
+        public boolean onDoubleTap(MotionEvent e) {
+            if (mScaling) {
+                return true;
             }
-
-            @Override
-            public void onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
-                doScroll(e1, e2, distanceX, distanceY);
+            mScaling = true;
+            if (mScale == 1) {
+                float[] pivot = getZoomOutPivot(e.getX(), e.getY());
+                doScaleAnim(pivot[0], pivot[1], mDoubleTabScale);
+            } else {
+                animToInitPosition();
             }
+            return true;
+        }
 
-            @Override
-            public void onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-                //doFling(e1, e2, velocityX, velocityY);
+        @Override
+        public boolean onDown(MotionEvent e) {
+            if (mScroller != null && !mScroller.isFinished()) {
+                mScroller.forceFinished(true);
             }
+            return true;
+        }
 
-            @Override
-            public void onDoubleTap(MotionEvent e) {
-                log(TAG, "onDoubleTap");
-                doDoubleTabScale(e.getX(), e.getY());
+        @Override
+        public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+            if (mScale <= 1) {
+                return true;
             }
+            mMatrix.mapRect(mTempRect, mInitRect);
+            if (Math.round(mTempRect.width()) == getViewRect().width()) {
+                return true;
+            }
+            int startX = 0;
+            int startY = 0;
+            int minX = 0;
+            int minY = 0;
+            int maxX = 0;
+            int maxY = 0;
+            if (velocityX > 0) {
+                minX = 0;
+                maxX = -Math.round(mTempRect.left);
+            } else {
+                minX = Math.round(getWidth() - getPaddingLeft() - getPaddingRight() - mTempRect.right);
+                maxX = 0;
+            }
+            if (velocityY > 0) {
+                minY = 0;
+                maxY = -Math.round(mTempRect.top);
+            } else {
+                minY = Math.round(getHeight() - getPaddingTop() - getPaddingBottom() - mTempRect.bottom);
+                maxY = 0;
+            }
+            final Runnable flingRunnable = new FlingRunnable(startX, startY, (int) velocityX, (int) velocityY, minX, maxX, minY, maxY);
+            if (Build.VERSION.SDK_INT >= 16) {
+                postOnAnimation(flingRunnable);
+            } else {
+                post(flingRunnable);
+            }
+            return super.onFling(e1, e2, velocityX, velocityY);
+        }
 
-            @Override
-            public void onScaleBegin(float px, float py) {
-                log(TAG, "onScaleBegin");
-                onGestureScaleBegin(px, py);
+        @Override
+        public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
+            if (mScale <= 1) {
+                return true;
             }
+            if (mScaling) {
+                return true;
+            }
+            mMatrix.postTranslate(-distanceX, -distanceY);
+            invalidate();
 
-            @Override
-            public void onScale(float px, float py, float factor) {
-                onGestureScale(px, py, factor);
-            }
-
-            @Override
-            public void onScaleEnd(float px, float py) {
-                log(TAG, "onScaleEnd");
-                onGestureScaleEnd(px, py);
-            }
-        };
+//        mMatrix.mapRect(mTempRect, mInitRect);
+//        final ScaleType scaleType = getScaleType();
+//        final Rect viewRect = getViewRect();
+//        if (scaleType == ScaleType.FIT_START) {
+//            if (Math.round(mTempRect.top) == viewRect.top) {
+//                distanceY = 0;
+//            }
+//        } else if (scaleType == ScaleType.FIT_END) {
+//            if (Math.round(mTempRect.bottom) == viewRect.bottom) {
+//                distanceY = 0;
+//            }
+//        } else {
+//            if (Math.round(mTempRect.centerY()) == viewRect.centerY()) {
+//                distanceY = 0;
+//            }
+//        }
+//        mMatrix.postTranslate(-distanceX, -distanceY);
+//        mMatrix.mapRect(mTempRect, mInitRect);
+//        if (mTempRect.left > 0) {
+//            mMatrix.postTranslate(-mTempRect.left, 0);
+//        }
+//        if (mTempRect.right < getWidth() - getPaddingLeft() - getPaddingRight()) {
+//            mMatrix.postTranslate(getWidth() - getPaddingLeft() - getPaddingRight() - mTempRect.right, 0);
+//        }
+//        if (distanceY != 0) {
+//            if (mTempRect.top > 0) {
+//                mMatrix.postTranslate(0, -mTempRect.top);
+//            }
+//            if (mTempRect.bottom < getHeight() - getPaddingTop() - getPaddingBottom()) {
+//                mMatrix.postTranslate(0, getHeight() - getPaddingTop() - getPaddingBottom() - mTempRect.bottom);
+//            }
+//        }
+//        invalidate();
+            return true;
+        }
     }
 
     private static void log(String TAG, String msg) {
