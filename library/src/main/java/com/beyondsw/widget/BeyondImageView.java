@@ -49,6 +49,15 @@ public class BeyondImageView extends ImageView {
     private OverScroller mScroller;
     private GestureDetector mGestureDetector;
     private ScaleGestureDetector mScaleGestureDetector;
+    private static final float FLING_OVER_SCROLL_FACTOR = .125f;
+    private static final float OVER_SCROLL_FACTOR = .25f;
+    private int mFlingOverScrollX;
+    private int mFlingOverScrollY;
+    private int mOverScrollX;
+    private int mOverScrollY;
+    private boolean mFlingOverScrollEnabled = true;
+    private boolean mOverScrollEnabled = true;
+    private Rect mViewRect;
 
     public BeyondImageView(Context context) {
         this(context, null);
@@ -136,21 +145,54 @@ public class BeyondImageView extends ImageView {
         }
     }
 
-    @Override
-    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
-        super.onLayout(changed, left, top, right, bottom);
+    private void updateViewRect() {
+        int left;
+        int top;
+        int right;
+        int bottom;
+        if (getCropToPaddingCompat()) {
+            left = getPaddingLeft();
+            top = getPaddingTop();
+            right = getWidth() - left - getPaddingRight();
+            bottom = getHeight() - top - getPaddingBottom();
+        } else {
+            left = top = 0;
+            right = getWidth();
+            bottom = getHeight();
+        }
+        if (mViewRect == null) {
+            mViewRect = new Rect();
+        }
+        mViewRect.set(left, top, right, bottom);
+    }
+
+    private void initMatrix(){
         Drawable drawable = getDrawable();
         if (drawable != null) {
             mInitRect.set(drawable.getBounds());
             Matrix matrix = getImageMatrix();
             if (matrix != null) {
                 matrix.mapRect(mInitRect);
-                invalidate();
             }
             mMatrix.reset();
             mScale = 1;
             mScaling = false;
         }
+    }
+
+    private void updateOverScroll(){
+        mFlingOverScrollX = Math.round(mViewRect.width() * FLING_OVER_SCROLL_FACTOR);
+        mFlingOverScrollY = Math.round(mViewRect.height() * FLING_OVER_SCROLL_FACTOR);
+        mOverScrollX = Math.round(mViewRect.width() * OVER_SCROLL_FACTOR);
+        mOverScrollY = Math.round(mViewRect.height() * OVER_SCROLL_FACTOR);
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        super.onLayout(changed, left, top, right, bottom);
+        updateViewRect();
+        initMatrix();
+        updateOverScroll();
     }
 
     @Override
@@ -159,7 +201,7 @@ public class BeyondImageView extends ImageView {
             if (mGestureDetector == null) {
                 GestureCallback callback = new GestureCallback();
                 mGestureDetector = new GestureDetector(getContext(), callback);
-                mScaleGestureDetector = new ScaleGestureDetector(getContext(),callback);
+                mScaleGestureDetector = new ScaleGestureDetector(getContext(), callback);
             }
         }
         mGestureDetector.onTouchEvent(event);
@@ -170,7 +212,7 @@ public class BeyondImageView extends ImageView {
     private void animTranslationToInit() {
         mMatrix.mapRect(mTempRect, mInitRect);
         final ScaleType scaleType = getScaleType();
-        final Rect viewRect = getViewRect();
+        final Rect viewRect = mViewRect;
         float dy;
         if (scaleType == ScaleType.FIT_START) {
             dy = viewRect.top - mTempRect.top;
@@ -183,7 +225,6 @@ public class BeyondImageView extends ImageView {
             mFixTranslationAnimator = ValueAnimator.ofFloat(0, dy).setDuration(220);
             mFixTranslationAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                 float t = 0;
-
                 @Override
                 public void onAnimationUpdate(ValueAnimator animation) {
                     float value = (float) animation.getAnimatedValue();
@@ -197,7 +238,7 @@ public class BeyondImageView extends ImageView {
     }
 
     private boolean isFillWithImage(RectF rect) {
-        Rect viewRect = getViewRect();
+        final Rect viewRect = mViewRect;
         return rect.contains(viewRect.left, viewRect.top, viewRect.right, viewRect.bottom);
     }
 
@@ -210,11 +251,74 @@ public class BeyondImageView extends ImageView {
 
         int oldX;
         int oldY;
+        int startX;
+        int startY;
+        int vx;
+        int vy;
+        int minX;
+        int maxX;
+        int minY;
+        int maxY;
+        int overX;
+        int overY;
 
-        FlingRunnable(int startX, int startY, int vx, int vy, int minX, int maxX, int minY, int maxY) {
-            oldX = startX;
-            oldY = startY;
-            mScroller.fling(startX, startY, vx, vy, minX, maxX, minY, maxY);
+        void start() {
+            mScroller.fling(startX, startY, vx, vy, minX, maxX, minY, maxY, overX, overY);
+            if (Build.VERSION.SDK_INT >= 16) {
+                postOnAnimation(this);
+            } else {
+                post(this);
+            }
+        }
+
+        FlingRunnable startX(int startX) {
+            this.startX = startX;
+            return this;
+        }
+
+        FlingRunnable startY(int startY) {
+            this.startY = startY;
+            return this;
+        }
+
+        FlingRunnable vx(int vx) {
+            this.vx = vx;
+            return this;
+        }
+
+        FlingRunnable vy(int vy) {
+            this.vy = vy;
+            return this;
+        }
+
+        FlingRunnable minX(int minX) {
+            this.minX = minX;
+            return this;
+        }
+
+        FlingRunnable maxX(int maxX) {
+            this.maxX = maxX;
+            return this;
+        }
+
+        FlingRunnable minY(int minY) {
+            this.minY = minY;
+            return this;
+        }
+
+        FlingRunnable maxY(int maxY) {
+            this.maxY = maxY;
+            return this;
+        }
+
+        FlingRunnable overX(int overX) {
+            this.overX = overX;
+            return this;
+        }
+
+        FlingRunnable overY(int overY) {
+            this.overY = overY;
+            return this;
         }
 
         @Override
@@ -241,18 +345,6 @@ public class BeyondImageView extends ImageView {
                 }
             }
         }
-    }
-
-    private void printMatrix() {
-        mMatrix.getValues(mValues);
-        log(TAG, "----------------------------");
-        log(TAG, "mMatrix.scaleX=" + mValues[Matrix.MSCALE_X]);
-        log(TAG, "mMatrix.scaleY=" + mValues[Matrix.MSCALE_Y]);
-        log(TAG, "mMatrix.tx=" + mValues[Matrix.MTRANS_X]);
-        log(TAG, "mMatrix.ty=" + mValues[Matrix.MTRANS_Y]);
-        log(TAG, "mMatrix.sx=" + mValues[Matrix.MSKEW_X]);
-        log(TAG, "mMatrix.sy=" + mValues[Matrix.MSKEW_Y]);
-        log(TAG, "#############################");
     }
 
     private void doScaleAnim(final float px, final float py, float toScale) {
@@ -285,31 +377,11 @@ public class BeyondImageView extends ImageView {
         doScaleAnim(px, py, 1);
     }
 
-    private Rect getViewRect() {
-        Rect rect = new Rect();
-        int left;
-        int top;
-        int right;
-        int bottom;
-        if (getCropToPaddingCompat()) {
-            left = getPaddingLeft();
-            top = getPaddingTop();
-            right = getWidth() - left - getPaddingRight();
-            bottom = getHeight() - top - getPaddingBottom();
-        } else {
-            left = top = 0;
-            right = getWidth();
-            bottom = getHeight();
-        }
-        rect.set(left, top, right, bottom);
-        return rect;
-    }
-
     private float[] getZoomOutPivot(float x, float y) {
         mTempMatrix.set(mMatrix);
         mTempMatrix.postScale(mDoubleTabScale, mDoubleTabScale, x, y);
         mTempMatrix.mapRect(mTempRect, mInitRect);
-        final Rect vRect = getViewRect();
+        final Rect vRect = mViewRect;
         if (mTempRect.left >= vRect.left && mTempRect.right <= vRect.right) {
             mTempMatrix.postTranslate(vRect.centerX() - mTempRect.centerX(), 0);
         } else if (mTempRect.left > vRect.left) {
@@ -359,10 +431,10 @@ public class BeyondImageView extends ImageView {
         float startTy = mValues[Matrix.MTRANS_Y];
         float px = getPivot(mDoubleTabScale, startTx, endTx);
         float py = getPivot(mDoubleTabScale, startTy, endTy);
-        return new float[]{px,py};
+        return new float[]{px, py};
     }
 
-    private class GestureCallback extends GestureDetector.SimpleOnGestureListener implements ScaleGestureDetector.OnScaleGestureListener{
+    private class GestureCallback extends GestureDetector.SimpleOnGestureListener implements ScaleGestureDetector.OnScaleGestureListener {
 
         @Override
         public boolean onScale(ScaleGestureDetector detector) {
@@ -389,12 +461,12 @@ public class BeyondImageView extends ImageView {
             if (mScale < 1) {
                 animToInitPosition();
             } else if (mScale > mMaxScale) {
-                float px,py;
+                float px, py;
                 mTempMatrix.set(mMatrix);
                 final float targetScale = mMaxScale / mScale;
                 mTempMatrix.postScale(targetScale, targetScale, mScaleBeginPx, mScaleBeginPy);
                 mTempMatrix.mapRect(mTempRect, mInitRect);
-                final Rect viewRect = getViewRect();
+                final Rect viewRect = mViewRect;
                 final boolean fillHorizontal = mTempRect.left <= viewRect.left && mTempRect.right >= viewRect.right;
                 final boolean fillVertical = mTempRect.top <= viewRect.top && mTempRect.bottom >= viewRect.bottom;
                 if (fillHorizontal && fillVertical) {
@@ -459,14 +531,16 @@ public class BeyondImageView extends ImageView {
             return true;
         }
 
+        @TargetApi(16)
         @Override
         public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-            if (mScale <= 1) {
-                return true;
-            }
             mMatrix.mapRect(mTempRect, mInitRect);
-            if (Math.round(mTempRect.width()) == getViewRect().width()) {
-                return true;
+            final Rect vRect = mViewRect;
+            if (vRect.left <= mTempRect.left && vRect.right >= mTempRect.right) {
+                velocityX = 0;
+            }
+            if (vRect.top <= mTempRect.top && vRect.bottom >= mTempRect.bottom) {
+                velocityY = 0;
             }
             int startX = 0;
             int startY = 0;
@@ -477,70 +551,39 @@ public class BeyondImageView extends ImageView {
             if (velocityX > 0) {
                 minX = 0;
                 maxX = -Math.round(mTempRect.left);
-            } else {
+            } else if (velocityX < 0) {
                 minX = Math.round(getWidth() - getPaddingLeft() - getPaddingRight() - mTempRect.right);
                 maxX = 0;
             }
             if (velocityY > 0) {
                 minY = 0;
                 maxY = -Math.round(mTempRect.top);
-            } else {
+            } else if (velocityY < 0) {
                 minY = Math.round(getHeight() - getPaddingTop() - getPaddingBottom() - mTempRect.bottom);
                 maxY = 0;
             }
-            final Runnable flingRunnable = new FlingRunnable(startX, startY, (int) velocityX, (int) velocityY, minX, maxX, minY, maxY);
-            if (Build.VERSION.SDK_INT >= 16) {
-                postOnAnimation(flingRunnable);
-            } else {
-                post(flingRunnable);
+            if (velocityX != 0 || velocityY != 0) {
+                new FlingRunnable()
+                        .startX(startX)
+                        .startY(startY)
+                        .vx((int) velocityX)
+                        .vy((int) velocityY)
+                        .minX(minX)
+                        .maxX(maxX)
+                        .minY(minY)
+                        .maxY(maxY)
+                        .overX(mFlingOverScrollX)
+                        .overY(mFlingOverScrollY)
+                        .start();
             }
-            return super.onFling(e1, e2, velocityX, velocityY);
+            return true;
         }
 
         @Override
         public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
-            if (mScale <= 1) {
-                return true;
-            }
-            if (mScaling) {
-                return true;
-            }
             mMatrix.postTranslate(-distanceX, -distanceY);
-            invalidate();
 
-//        mMatrix.mapRect(mTempRect, mInitRect);
-//        final ScaleType scaleType = getScaleType();
-//        final Rect viewRect = getViewRect();
-//        if (scaleType == ScaleType.FIT_START) {
-//            if (Math.round(mTempRect.top) == viewRect.top) {
-//                distanceY = 0;
-//            }
-//        } else if (scaleType == ScaleType.FIT_END) {
-//            if (Math.round(mTempRect.bottom) == viewRect.bottom) {
-//                distanceY = 0;
-//            }
-//        } else {
-//            if (Math.round(mTempRect.centerY()) == viewRect.centerY()) {
-//                distanceY = 0;
-//            }
-//        }
-//        mMatrix.postTranslate(-distanceX, -distanceY);
-//        mMatrix.mapRect(mTempRect, mInitRect);
-//        if (mTempRect.left > 0) {
-//            mMatrix.postTranslate(-mTempRect.left, 0);
-//        }
-//        if (mTempRect.right < getWidth() - getPaddingLeft() - getPaddingRight()) {
-//            mMatrix.postTranslate(getWidth() - getPaddingLeft() - getPaddingRight() - mTempRect.right, 0);
-//        }
-//        if (distanceY != 0) {
-//            if (mTempRect.top > 0) {
-//                mMatrix.postTranslate(0, -mTempRect.top);
-//            }
-//            if (mTempRect.bottom < getHeight() - getPaddingTop() - getPaddingBottom()) {
-//                mMatrix.postTranslate(0, getHeight() - getPaddingTop() - getPaddingBottom() - mTempRect.bottom);
-//            }
-//        }
-//        invalidate();
+            invalidate();
             return true;
         }
     }
