@@ -2,6 +2,7 @@ package com.beyondsw.widget;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
+import android.animation.PropertyValuesHolder;
 import android.animation.ValueAnimator;
 import android.annotation.TargetApi;
 import android.content.Context;
@@ -37,7 +38,7 @@ public class BeyondImageView extends ImageView {
     private Matrix mMatrix;
     private Matrix mTempMatrix;
     private boolean mScaling;
-    private ValueAnimator mDoubleTabScaleAnimator;
+    private ValueAnimator mScaleAnimator;
     private ValueAnimator mFixTranslationAnimator;
     private float[] mValues;
     private float mScale = 1f;
@@ -166,7 +167,7 @@ public class BeyondImageView extends ImageView {
         mViewRect.set(left, top, right, bottom);
     }
 
-    private void initMatrix(){
+    private void initMatrix() {
         Drawable drawable = getDrawable();
         if (drawable != null) {
             mInitRect.set(drawable.getBounds());
@@ -180,7 +181,7 @@ public class BeyondImageView extends ImageView {
         }
     }
 
-    private void updateOverScroll(){
+    private void updateOverScroll() {
         mFlingOverScrollX = Math.round(mViewRect.width() * FLING_OVER_SCROLL_FACTOR);
         mFlingOverScrollY = Math.round(mViewRect.height() * FLING_OVER_SCROLL_FACTOR);
         mOverScrollX = Math.round(mViewRect.width() * OVER_SCROLL_FACTOR);
@@ -195,18 +196,68 @@ public class BeyondImageView extends ImageView {
         updateOverScroll();
     }
 
+    private void initGestureDetector(){
+        GestureCallback callback = new GestureCallback();
+        mGestureDetector = new GestureDetector(getContext(), callback);
+        mScaleGestureDetector = new ScaleGestureDetector(getContext(), callback);
+    }
+
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+        final int action = event.getAction() & MotionEvent.ACTION_MASK;
+        if (action == MotionEvent.ACTION_DOWN) {
             if (mGestureDetector == null) {
-                GestureCallback callback = new GestureCallback();
-                mGestureDetector = new GestureDetector(getContext(), callback);
-                mScaleGestureDetector = new ScaleGestureDetector(getContext(), callback);
+                initGestureDetector();
             }
         }
         mGestureDetector.onTouchEvent(event);
         mScaleGestureDetector.onTouchEvent(event);
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            //animToEdgeIfNeeded();
+        }
         return true;
+    }
+
+    private void animToEdgeIfNeeded(){
+        if ((mScaleAnimator != null && mScaleAnimator.isRunning())
+                || (mFixTranslationAnimator != null && mFixTranslationAnimator.isRunning())) {
+            return;
+        }
+        mMatrix.mapRect(mTempRect, mInitRect);
+        float dx;
+        float dy;
+        final Rect vRect = mViewRect;
+        if (mTempRect.left - vRect.left <= mTempRect.right - vRect.right) {
+            dx = vRect.left - mTempRect.left;
+        } else {
+            dx = vRect.right - mTempRect.right;
+        }
+        if (mTempRect.top - vRect.top <= mTempRect.bottom - vRect.bottom) {
+            dy = vRect.top - mTempRect.top;
+        } else {
+            dy = vRect.bottom - mTempRect.bottom;
+        }
+
+        if (dx != 0 || dy != 0) {
+            final PropertyValuesHolder xph = PropertyValuesHolder.ofFloat("x",0,dx);
+            final PropertyValuesHolder yph = PropertyValuesHolder.ofFloat("y",0,dy);
+            final ValueAnimator animator = ValueAnimator.ofPropertyValuesHolder(xph, yph).setDuration(220);
+            animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                float prevdx = 0;
+                float prevdy = 0;
+
+                @Override
+                public void onAnimationUpdate(ValueAnimator animation) {
+                    float dx = (float) animation.getAnimatedValue("x");
+                    float dy = (float) animation.getAnimatedValue("y");
+                    mMatrix.postTranslate(dx - prevdx, dy - prevdy);
+                    invalidate();
+                    prevdx = dx;
+                    prevdy = dy;
+                }
+            });
+            animator.start();
+        }
     }
 
     private void animTranslationToInit() {
@@ -225,6 +276,7 @@ public class BeyondImageView extends ImageView {
             mFixTranslationAnimator = ValueAnimator.ofFloat(0, dy).setDuration(220);
             mFixTranslationAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                 float t = 0;
+
                 @Override
                 public void onAnimationUpdate(ValueAnimator animation) {
                     float value = (float) animation.getAnimatedValue();
@@ -348,8 +400,8 @@ public class BeyondImageView extends ImageView {
     }
 
     private void doScaleAnim(final float px, final float py, float toScale) {
-        mDoubleTabScaleAnimator = ValueAnimator.ofFloat(mScale, toScale).setDuration(200);
-        mDoubleTabScaleAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+        mScaleAnimator = ValueAnimator.ofFloat(mScale, toScale).setDuration(200);
+        mScaleAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             @Override
             public void onAnimationUpdate(ValueAnimator animation) {
                 float value = (float) animation.getAnimatedValue();
@@ -359,13 +411,13 @@ public class BeyondImageView extends ImageView {
                 mScale = value;
             }
         });
-        mDoubleTabScaleAnimator.addListener(new AnimatorListenerAdapter() {
+        mScaleAnimator.addListener(new AnimatorListenerAdapter() {
             @Override
             public void onAnimationEnd(Animator animation) {
                 mScaling = false;
             }
         });
-        mDoubleTabScaleAnimator.start();
+        mScaleAnimator.start();
     }
 
     private void animToInitPosition() {
@@ -450,8 +502,8 @@ public class BeyondImageView extends ImageView {
             mScaling = true;
             mScaleBeginPx = detector.getFocusX();
             mScaleBeginPy = detector.getFocusY();
-            if (mDoubleTabScaleAnimator != null && mDoubleTabScaleAnimator.isRunning()) {
-                mDoubleTabScaleAnimator.cancel();
+            if (mScaleAnimator != null && mScaleAnimator.isRunning()) {
+                mScaleAnimator.cancel();
             }
             return true;
         }
@@ -563,6 +615,15 @@ public class BeyondImageView extends ImageView {
                 maxY = 0;
             }
             if (velocityX != 0 || velocityY != 0) {
+                final int overX;
+                final int overY;
+                if (mFlingOverScrollEnabled) {
+                    overX = mFlingOverScrollX;
+                    overY = mFlingOverScrollY;
+                } else {
+                    overX = 0;
+                    overY = 0;
+                }
                 new FlingRunnable()
                         .startX(startX)
                         .startY(startY)
@@ -572,8 +633,8 @@ public class BeyondImageView extends ImageView {
                         .maxX(maxX)
                         .minY(minY)
                         .maxY(maxY)
-                        .overX(mFlingOverScrollX)
-                        .overY(mFlingOverScrollY)
+                        .overX(overX)
+                        .overY(overY)
                         .start();
             }
             return true;
@@ -581,9 +642,58 @@ public class BeyondImageView extends ImageView {
 
         @Override
         public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
-            mMatrix.postTranslate(-distanceX, -distanceY);
 
-            invalidate();
+            mMatrix.mapRect(mTempRect, mInitRect);
+            final Rect vRect = mViewRect;
+            if (vRect.left <= mTempRect.left && vRect.right >= mTempRect.right) {
+                distanceX = 0;
+            }
+            if (vRect.top <= mTempRect.top && vRect.bottom >= mTempRect.bottom) {
+                distanceY = 0;
+            }
+
+            distanceX = -distanceX;
+            distanceY = -distanceY;
+            mTempRect.offset(distanceX, distanceY);
+
+            if (distanceX != 0) {
+                int maxLeft;
+                int minRight;
+                if (mOverScrollEnabled) {
+                    maxLeft = vRect.left + mOverScrollX;
+                    minRight = vRect.right - mOverScrollX;
+                } else {
+                    maxLeft = vRect.left;
+                    minRight = vRect.right;
+                }
+                if (mTempRect.left > maxLeft) {
+                    distanceX += (maxLeft - mTempRect.left);
+                }
+                if (mTempRect.right < minRight) {
+                    distanceX += (minRight - mTempRect.right);
+                }
+            }
+            if (distanceY != 0) {
+                int maxTop;
+                int minBottom;
+                if (mOverScrollEnabled) {
+                    maxTop = vRect.top + mOverScrollY;
+                    minBottom = vRect.bottom - mOverScrollY;
+                } else {
+                    maxTop = vRect.top;
+                    minBottom = vRect.bottom;
+                }
+                if (mTempRect.top > maxTop) {
+                    distanceY += (maxTop - mTempRect.top);
+                }
+                if (mTempRect.bottom < minBottom) {
+                    distanceY += (minBottom - mTempRect.bottom);
+                }
+            }
+            if (distanceX != 0 || distanceY != 0) {
+                mMatrix.postTranslate(distanceX, distanceY);
+                invalidate();
+            }
             return true;
         }
     }
