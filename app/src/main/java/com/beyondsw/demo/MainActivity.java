@@ -1,75 +1,55 @@
 package com.beyondsw.demo;
 
-import android.graphics.Matrix;
 import android.os.Bundle;
+import android.support.v4.view.PagerAdapter;
+import android.support.v4.view.ViewPager;
 import android.support.v7.app.AppCompatActivity;
-import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ImageView;
 
-import com.beyondsw.widget.BeyondImageView;
+import com.bumptech.glide.Glide;
 
 public class MainActivity extends AppCompatActivity{
 
-    private static final String TAG = "BeyondImageView";
-    private float[] mValues = new float[9];
-
-    private BeyondImageView mImageView;
+    private ViewPager mImagePager;
+    private LayoutInflater mInflater;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        mImageView = (BeyondImageView)findViewById(R.id.image);
+        mInflater = LayoutInflater.from(this);
+        mImagePager = ViewUtils.findView(this, R.id.image_pager);
+        mImagePager.setPageMargin(DimenUtils.dp2pxInt(6));
+        mImagePager.setAdapter(new ImageAdapter());
     }
 
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.menu,menu);
-        return true;
-    }
+    private class ImageAdapter extends PagerAdapter{
 
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        switch (item.getItemId()){
-            case R.id.matrix:
-                mImageView.setScaleType(ImageView.ScaleType.MATRIX);
-                break;
-            case R.id.fit_xy:
-                mImageView.setScaleType(ImageView.ScaleType.FIT_XY);
-                break;
-            case R.id.fit_start:
-                mImageView.setScaleType(ImageView.ScaleType.FIT_START);
-                break;
-            case R.id.fit_center:
-                mImageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
-                break;
-            case R.id.fit_end:
-                mImageView.setScaleType(ImageView.ScaleType.FIT_END);
-                break;
-            case R.id.center:
-                mImageView.setScaleType(ImageView.ScaleType.CENTER);
-                break;
-            case R.id.center_crop:
-                mImageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
-                break;
-            case R.id.center_inside:
-                mImageView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-                break;
+        @Override
+        public Object instantiateItem(ViewGroup container, int position) {
+            View layout = mInflater.inflate(R.layout.item_image,container,false);
+            ImageView imageView = ViewUtils.findView(layout,R.id.image);
+            Glide.with(MainActivity.this).load(PhotoLoadTest.rc_images[position][1]).into(imageView);
+            container.addView(layout);
+            return layout;
         }
-        return true;
-    }
 
-    private void printMatrix(String tag, Matrix matrix){
-        matrix.getValues(mValues);
-        Log.d(TAG,"----------------------------");
-        Log.d(TAG, tag + ",mMatrix.scaleX=" + mValues[Matrix.MSCALE_X]);
-        Log.d(TAG, tag + ",mMatrix.scaleY=" + mValues[Matrix.MSCALE_Y]);
-        Log.d(TAG, tag + ",mMatrix.tx=" + mValues[Matrix.MTRANS_X]);
-        Log.d(TAG, tag + ",mMatrix.ty=" + mValues[Matrix.MTRANS_Y]);
-        Log.d(TAG, tag + ",mMatrix.sx=" + mValues[Matrix.MSKEW_X]);
-        Log.d(TAG, tag + ",mMatrix.sy=" + mValues[Matrix.MSKEW_Y]);
-        Log.d(TAG,"#############################");
+        @Override
+        public void destroyItem(ViewGroup container, int position, Object object) {
+            container.removeView((View)object);
+        }
+
+        @Override
+        public int getCount() {
+            return PhotoLoadTest.rc_images.length;
+        }
+
+        @Override
+        public boolean isViewFromObject(View view, Object object) {
+            return view == object;
+        }
     }
 }
