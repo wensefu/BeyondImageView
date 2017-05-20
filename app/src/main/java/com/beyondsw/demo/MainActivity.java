@@ -22,7 +22,7 @@ public class MainActivity extends AppCompatActivity{
         setContentView(R.layout.activity_main);
         mInflater = LayoutInflater.from(this);
         mImagePager = ViewUtils.findView(this, R.id.image_pager);
-        mImagePager.setPageMargin(DimenUtils.dp2pxInt(6));
+        mImagePager.setPageMargin(DimenUtils.dp2pxInt(12));
         mImagePager.setAdapter(new ImageAdapter());
     }
 

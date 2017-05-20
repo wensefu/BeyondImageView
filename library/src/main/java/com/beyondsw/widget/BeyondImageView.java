@@ -7,9 +7,7 @@ import android.animation.ValueAnimator;
 import android.annotation.TargetApi;
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.Matrix;
-import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
@@ -19,6 +17,7 @@ import android.util.Log;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
+import android.view.animation.Interpolator;
 import android.widget.ImageView;
 import android.widget.OverScroller;
 
@@ -69,6 +68,45 @@ public class BeyondImageView extends ImageView {
         init();
     }
 
+    private static class ViscousFluidInterpolator implements Interpolator {
+
+        /**
+         * Controls the viscous fluid effect (how much of it).
+         */
+        private static final float VISCOUS_FLUID_SCALE = 3f;
+
+        private static final float VISCOUS_FLUID_NORMALIZE;
+        private static final float VISCOUS_FLUID_OFFSET;
+
+        static {
+            // must be set to 1.0 (used in viscousFluid())
+            VISCOUS_FLUID_NORMALIZE = 1.0f / viscousFluid(1.0f);
+            // account for very small floating-point error
+            VISCOUS_FLUID_OFFSET = 1.0f - VISCOUS_FLUID_NORMALIZE * viscousFluid(1.0f);
+        }
+
+        private static float viscousFluid(float x) {
+            x *= VISCOUS_FLUID_SCALE;
+            if (x < 1.0f) {
+                x -= (1.0f - (float) Math.exp(-x));
+            } else {
+                float start = 0.36787944117f;   // 1/e == exp(-1)
+                x = 1.0f - (float) Math.exp(1.0f - x);
+                x = start + x * (1.0f - start);
+            }
+            return x;
+        }
+
+        @Override
+        public float getInterpolation(float input) {
+            final float interpolated = VISCOUS_FLUID_NORMALIZE * viscousFluid(input);
+            if (interpolated > 0) {
+                return interpolated + VISCOUS_FLUID_OFFSET;
+            }
+            return interpolated;
+        }
+    }
+
     private void initCropToPadding() {
         try {
             Field field = ImageView.class.getDeclaredField("mCropToPadding");
@@ -89,18 +127,12 @@ public class BeyondImageView extends ImageView {
         mTempMatrix = new Matrix();
         mValues = new float[9];
         mScroller = new OverScroller(getContext());
-
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setColor(Color.YELLOW);
-        paint.setStrokeWidth(10);
     }
 
     @TargetApi(16)
     private boolean getCropToPaddingCompat() {
         return Build.VERSION.SDK_INT < 16 ? mCropToPadding : getCropToPadding();
     }
-
-    Paint paint = new Paint();
 
     @TargetApi(16)
     @Override
@@ -140,9 +172,6 @@ public class BeyondImageView extends ImageView {
             }
             drawable.draw(canvas);
             canvas.restoreToCount(saveCount);
-        }
-        if (mInitRect.width() > 0) {
-            canvas.drawRect(mInitRect, paint);
         }
     }
 
@@ -196,10 +225,19 @@ public class BeyondImageView extends ImageView {
         updateOverScroll();
     }
 
-    private void initGestureDetector(){
+    private void initGestureDetector() {
         GestureCallback callback = new GestureCallback();
         mGestureDetector = new GestureDetector(getContext(), callback);
         mScaleGestureDetector = new ScaleGestureDetector(getContext(), callback);
+    }
+
+    /**
+     * 设置双击时放大的倍数（相对初始大小）
+     *
+     * @param scale
+     */
+    public void setDoubleTabScale(float scale) {
+        mDoubleTabScale = scale;
     }
 
     @Override
@@ -210,38 +248,48 @@ public class BeyondImageView extends ImageView {
                 initGestureDetector();
             }
         }
+        if (action == MotionEvent.ACTION_MOVE) {
+            getParent().requestDisallowInterceptTouchEvent(true);
+        }
         mGestureDetector.onTouchEvent(event);
         mScaleGestureDetector.onTouchEvent(event);
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-            //animToEdgeIfNeeded();
+            animToEdgeIfNeeded();
         }
         return true;
     }
 
-    private void animToEdgeIfNeeded(){
+    private void animToEdgeIfNeeded() {
         if ((mScaleAnimator != null && mScaleAnimator.isRunning())
                 || (mFixTranslationAnimator != null && mFixTranslationAnimator.isRunning())) {
             return;
         }
+        if(!mScroller.isFinished()){
+            return;
+        }
         mMatrix.mapRect(mTempRect, mInitRect);
-        float dx;
-        float dy;
+        float dx = 0;
+        float dy = 0;
         final Rect vRect = mViewRect;
-        if (mTempRect.left - vRect.left <= mTempRect.right - vRect.right) {
+        if (mTempRect.left > vRect.left && (mTempRect.right - vRect.right >= mTempRect.left - vRect.left)) {
             dx = vRect.left - mTempRect.left;
-        } else {
+        }
+        if (mTempRect.right < vRect.right && (vRect.left - mTempRect.left >= vRect.right - mTempRect.right)) {
             dx = vRect.right - mTempRect.right;
         }
-        if (mTempRect.top - vRect.top <= mTempRect.bottom - vRect.bottom) {
+        if (mTempRect.top > vRect.top && (mTempRect.bottom - vRect.bottom >= mTempRect.top - vRect.top)) {
             dy = vRect.top - mTempRect.top;
-        } else {
+        }
+
+        if (mTempRect.bottom < vRect.bottom && (vRect.top - mTempRect.top >= vRect.bottom - mTempRect.bottom)) {
             dy = vRect.bottom - mTempRect.bottom;
         }
 
         if (dx != 0 || dy != 0) {
-            final PropertyValuesHolder xph = PropertyValuesHolder.ofFloat("x",0,dx);
-            final PropertyValuesHolder yph = PropertyValuesHolder.ofFloat("y",0,dy);
-            final ValueAnimator animator = ValueAnimator.ofPropertyValuesHolder(xph, yph).setDuration(220);
+            final PropertyValuesHolder xph = PropertyValuesHolder.ofFloat("x", 0, dx);
+            final PropertyValuesHolder yph = PropertyValuesHolder.ofFloat("y", 0, dy);
+            final ValueAnimator animator = ValueAnimator.ofPropertyValuesHolder(xph, yph).setDuration(300);
+            animator.setInterpolator(new ViscousFluidInterpolator());
             animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                 float prevdx = 0;
                 float prevdy = 0;
@@ -400,7 +448,7 @@ public class BeyondImageView extends ImageView {
     }
 
     private void doScaleAnim(final float px, final float py, float toScale) {
-        mScaleAnimator = ValueAnimator.ofFloat(mScale, toScale).setDuration(200);
+        mScaleAnimator = ValueAnimator.ofFloat(mScale, toScale).setDuration(400); //// FIXME: 2017/5/19 动画时间以及拦截器参数需要根据放大倍数做适应处理
         mScaleAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             @Override
             public void onAnimationUpdate(ValueAnimator animation) {
@@ -417,6 +465,7 @@ public class BeyondImageView extends ImageView {
                 mScaling = false;
             }
         });
+        mScaleAnimator.setInterpolator(new ViscousFluidInterpolator());
         mScaleAnimator.start();
     }
 
