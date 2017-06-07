@@ -45,6 +45,7 @@ public class BeyondImageView extends ImageView {
     private float mScaleBeginPy;
     private RectF mInitRect = new RectF();
     private RectF mTempRect = new RectF();
+    private RectF mTempRect2 = new RectF();
     private boolean mCropToPadding;
     private OverScroller mScroller;
     private GestureDetector mGestureDetector;
@@ -241,15 +242,26 @@ public class BeyondImageView extends ImageView {
     }
 
     @Override
+    public boolean canScrollHorizontally(int direction) {
+        if (direction < 0) {
+            mMatrix.mapRect(mTempRect2, mInitRect);
+            Log.d(TAG, "canScrollHorizontally: direction=" + direction + ",mTempRect2.left=" + mTempRect2.left);
+            return mTempRect2.left < mViewRect.left;
+        } else if (direction > 0) {
+            mMatrix.mapRect(mTempRect2, mInitRect);
+            Log.d(TAG, "canScrollHorizontally: direction=" + direction + ",mTempRect2.right=" + mTempRect2.right);
+            return mTempRect2.right > mViewRect.right;
+        }
+        return super.canScrollHorizontally(direction);
+    }
+
+    @Override
     public boolean onTouchEvent(MotionEvent event) {
         final int action = event.getAction() & MotionEvent.ACTION_MASK;
         if (action == MotionEvent.ACTION_DOWN) {
             if (mGestureDetector == null) {
                 initGestureDetector();
             }
-        }
-        if (action == MotionEvent.ACTION_MOVE) {
-            getParent().requestDisallowInterceptTouchEvent(true);
         }
         mGestureDetector.onTouchEvent(event);
         mScaleGestureDetector.onTouchEvent(event);
@@ -264,7 +276,7 @@ public class BeyondImageView extends ImageView {
                 || (mFixTranslationAnimator != null && mFixTranslationAnimator.isRunning())) {
             return;
         }
-        if(!mScroller.isFinished()){
+        if (!mScroller.isFinished()) {
             return;
         }
         mMatrix.mapRect(mTempRect, mInitRect);
