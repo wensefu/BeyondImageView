@@ -1,7 +1,5 @@
 package com.beyondsw.widget;
 
-import android.animation.Animator;
-import android.animation.AnimatorListenerAdapter;
 import android.animation.PropertyValuesHolder;
 import android.animation.ValueAnimator;
 import android.annotation.TargetApi;
@@ -38,7 +36,6 @@ public class BeyondImageView extends ImageView {
     private float mDoubleTabScale = DOUBLE_TAB_SCALE;
     private Matrix mMatrix;
     private Matrix mTempMatrix;
-    private boolean mScaling;
     private ValueAnimator mScaleAnimator;
     private ValueAnimator mFixTranslationAnimator;
     private float[] mValues;
@@ -208,7 +205,6 @@ public class BeyondImageView extends ImageView {
             }
             mMatrix.reset();
             mScale = 1;
-            mScaling = false;
         }
     }
 
@@ -434,7 +430,7 @@ public class BeyondImageView extends ImageView {
                 int diffX = newX - oldX;
                 int diffY = newY - oldY;
                 if (diffX != 0 || diffY != 0) {
-                    log(TAG, "FlingRunnable,diffX=" + diffX + ",diffY=" + diffY);
+                    //log(TAG, "FlingRunnable,diffX=" + diffX + ",diffY=" + diffY);
                     mMatrix.postTranslate(diffX, diffY);
                     invalidate();
                     oldX = newX;
@@ -449,6 +445,10 @@ public class BeyondImageView extends ImageView {
         }
     }
 
+    private boolean isScaling() {
+        return mScaleAnimator != null && mScaleAnimator.isRunning();
+    }
+
     private void doScaleAnim(final float px, final float py, float toScale) {
         mScaleAnimator = ValueAnimator.ofFloat(mScale, toScale).setDuration(400); //// FIXME: 2017/5/19 动画时间以及拦截器参数需要根据放大倍数做适应处理
         mScaleAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
@@ -459,12 +459,6 @@ public class BeyondImageView extends ImageView {
                 mMatrix.postScale(radioScale, radioScale, px, py);
                 invalidate();
                 mScale = value;
-            }
-        });
-        mScaleAnimator.addListener(new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationEnd(Animator animation) {
-                mScaling = false;
             }
         });
         mScaleAnimator.setInterpolator(new ViscousFluidInterpolator());
@@ -550,7 +544,6 @@ public class BeyondImageView extends ImageView {
 
         @Override
         public boolean onScaleBegin(ScaleGestureDetector detector) {
-            mScaling = true;
             mScaleBeginPx = detector.getFocusX();
             mScaleBeginPy = detector.getFocusY();
             if (mScaleAnimator != null && mScaleAnimator.isRunning()) {
@@ -613,10 +606,9 @@ public class BeyondImageView extends ImageView {
 
         @Override
         public boolean onDoubleTap(MotionEvent e) {
-            if (mScaling) {
+            if (isScaling()) {
                 return true;
             }
-            mScaling = true;
             if (mScale == 1) {
                 float[] pivot = getZoomOutPivot(e.getX(), e.getY());
                 doScaleAnim(pivot[0], pivot[1], mDoubleTabScale);
@@ -708,7 +700,7 @@ public class BeyondImageView extends ImageView {
             dx = -dx;
             dy = -dy;
 
-            Log.d(TAG, "onScroll: dx=" + dx + ",dy=" + dy + ",tempRect=" + mTempRect + ",vrect=" + mViewRect);
+            //Log.d(TAG, "onScroll: dx=" + dx + ",dy=" + dy + ",tempRect=" + mTempRect + ",vrect=" + mViewRect);
             if (dx < 0) {
                 getParent().requestDisallowInterceptTouchEvent(mTempRect.right > vRect.right);
             } else {
