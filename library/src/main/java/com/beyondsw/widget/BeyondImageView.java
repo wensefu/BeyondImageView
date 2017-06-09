@@ -482,7 +482,7 @@ public class BeyondImageView extends ImageView {
     }
 
     private void doScaleAnim(final float px, final float py, float toScale) {
-        mScaleAnimator = ValueAnimator.ofFloat(mScale, toScale).setDuration(400); //// FIXME: 2017/5/19 动画时间以及拦截器参数需要根据放大倍数做适应处理
+        mScaleAnimator = ValueAnimator.ofFloat(mScale, toScale).setDuration(400);
         mScaleAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             @Override
             public void onAnimationUpdate(ValueAnimator animation) {
