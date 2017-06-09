@@ -1,5 +1,7 @@
 package com.beyondsw.widget;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 import android.animation.PropertyValuesHolder;
 import android.animation.ValueAnimator;
 import android.annotation.TargetApi;
@@ -266,6 +268,7 @@ public class BeyondImageView extends ImageView {
             return;
         }
         mMatrix.mapRect(mTempRect, mInitRect);
+
         float dx = 0;
         float dy = 0;
         final Rect vRect = mViewRect;
@@ -310,25 +313,50 @@ public class BeyondImageView extends ImageView {
         mMatrix.mapRect(mTempRect, mInitRect);
         final ScaleType scaleType = getScaleType();
         final Rect viewRect = mViewRect;
+        float dx = 0;
         float dy;
         if (scaleType == ScaleType.FIT_START) {
             dy = viewRect.top - mTempRect.top;
+            Log.d(TAG, "animTranslationToInit: 1");
         } else if (scaleType == ScaleType.FIT_END) {
             dy = viewRect.bottom - mTempRect.bottom;
+            Log.d(TAG, "animTranslationToInit: 2");
         } else {
             dy = viewRect.centerY() - mTempRect.centerY();
+            Log.d(TAG, "animTranslationToInit: 3");
         }
+
+        if (mTempRect.left > viewRect.left && (mTempRect.right - viewRect.right >= mTempRect.left - viewRect.left)) {
+            dx = viewRect.left - mTempRect.left;
+        }
+        if (mTempRect.right < viewRect.right && (viewRect.left - mTempRect.left >= viewRect.right - mTempRect.right)) {
+            dx = viewRect.right - mTempRect.right;
+        }
+
         if (dy != 0) {
-            mFixTranslationAnimator = ValueAnimator.ofFloat(0, dy).setDuration(220);
+            PropertyValuesHolder vx = PropertyValuesHolder.ofFloat("tx",0,dx);
+            PropertyValuesHolder vy = PropertyValuesHolder.ofFloat("ty",0,dy);
+            mFixTranslationAnimator = ValueAnimator.ofPropertyValuesHolder(vx,vy).setDuration(220);
             mFixTranslationAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-                float t = 0;
+                float ty = 0;
+                float tx = 0;
 
                 @Override
                 public void onAnimationUpdate(ValueAnimator animation) {
-                    float value = (float) animation.getAnimatedValue();
-                    mMatrix.postTranslate(0, value - t);
+                    float valueY = (float) animation.getAnimatedValue("ty");
+                    float valueX = (float) animation.getAnimatedValue("tx");
+                    mMatrix.postTranslate(valueX - tx, valueY - ty);
                     invalidate();
-                    t = value;
+                    ty = valueY;
+                    tx = valueX;
+                }
+            });
+            mFixTranslationAnimator.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    mMatrix.mapRect(mTempRect, mInitRect);
+                    Log.d(TAG, "onAnimationEnd: mTempRect.cx=" + mTempRect.centerX() + ",vrect.cx=" + mViewRect.centerX());
+                    Log.d(TAG, "onAnimationEnd: mTempRect.cy=" + mTempRect.centerY() + ",vrect.cy=" + mViewRect.centerY());
                 }
             });
             mFixTranslationAnimator.start();
@@ -430,7 +458,7 @@ public class BeyondImageView extends ImageView {
                 int diffX = newX - oldX;
                 int diffY = newY - oldY;
                 if (diffX != 0 || diffY != 0) {
-                    //log(TAG, "FlingRunnable,diffX=" + diffX + ",diffY=" + diffY);
+                    log(TAG, "FlingRunnable,diffX=" + diffX + ",diffY=" + diffY);
                     mMatrix.postTranslate(diffX, diffY);
                     invalidate();
                     oldX = newX;
@@ -447,6 +475,10 @@ public class BeyondImageView extends ImageView {
 
     private boolean isScaling() {
         return mScaleAnimator != null && mScaleAnimator.isRunning();
+    }
+
+    private boolean isTransing() {
+        return mFixTranslationAnimator != null && mFixTranslationAnimator.isRunning();
     }
 
     private void doScaleAnim(final float px, final float py, float toScale) {
@@ -556,6 +588,7 @@ public class BeyondImageView extends ImageView {
         public void onScaleEnd(ScaleGestureDetector detector) {
             if (mScale < 1) {
                 animToInitPosition();
+                Log.d(TAG, "onScaleEnd: 1");
             } else if (mScale > mMaxScale) {
                 float px, py;
                 mTempMatrix.set(mMatrix);
@@ -567,7 +600,9 @@ public class BeyondImageView extends ImageView {
                 final boolean fillVertical = mTempRect.top <= viewRect.top && mTempRect.bottom >= viewRect.bottom;
                 if (fillHorizontal && fillVertical) {
                     doScaleAnim(mScaleBeginPx, mScaleBeginPy, mMaxScale);
+                    Log.d(TAG, "onScaleEnd: 21");
                 } else {
+                    Log.d(TAG, "onScaleEnd: 22");
                     float dx = 0;
                     float dy = 0;
                     if (!fillHorizontal) {
@@ -597,8 +632,10 @@ public class BeyondImageView extends ImageView {
                     doScaleAnim(px, py, mMaxScale);
                 }
             } else {
+                Log.d(TAG, "onScaleEnd: 3");
                 mMatrix.mapRect(mTempRect, mInitRect);
                 if (!isFillWithImage(mTempRect)) {
+                    Log.d(TAG, "onScaleEnd: 31");
                     animTranslationToInit();
                 }
             }
@@ -629,6 +666,10 @@ public class BeyondImageView extends ImageView {
         @TargetApi(16)
         @Override
         public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+            if (isScaling() || isTransing()) {
+                Log.d(TAG, "onFling: return on scaling | transing");
+                return true;
+            }
             mMatrix.mapRect(mTempRect, mInitRect);
             final Rect vRect = mViewRect;
             if (vRect.left <= mTempRect.left && vRect.right >= mTempRect.right) {
@@ -637,8 +678,6 @@ public class BeyondImageView extends ImageView {
             if (vRect.top <= mTempRect.top && vRect.bottom >= mTempRect.bottom) {
                 velocityY = 0;
             }
-
-            Log.d(TAG, "onFling: vx=" + velocityX + ",vy=" + velocityY);
 
             int startX = 0;
             int startY = 0;
