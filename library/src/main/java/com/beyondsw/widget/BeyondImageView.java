@@ -14,12 +14,14 @@ import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.util.AttributeSet;
 import android.util.Log;
-import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
+import android.view.ViewConfiguration;
 import android.view.animation.Interpolator;
 import android.widget.ImageView;
 import android.widget.OverScroller;
+
+import com.beyondsw.widget.gesture.BeyondGestureDetector;
 
 import java.lang.reflect.Field;
 
@@ -45,10 +47,9 @@ public class BeyondImageView extends ImageView {
     private float mScaleBeginPy;
     private RectF mInitRect = new RectF();
     private RectF mTempRect = new RectF();
-    private RectF mTempRect2 = new RectF();
     private boolean mCropToPadding;
     private OverScroller mScroller;
-    private GestureDetector mGestureDetector;
+    private BeyondGestureDetector mGestureDetector;
     private ScaleGestureDetector mScaleGestureDetector;
     private static final float FLING_OVER_SCROLL_FACTOR = .125f;
     private static final float OVER_SCROLL_FACTOR = .25f;
@@ -228,7 +229,10 @@ public class BeyondImageView extends ImageView {
 
     private void initGestureDetector() {
         GestureCallback callback = new GestureCallback();
-        mGestureDetector = new GestureDetector(getContext(), callback);
+        mGestureDetector = new BeyondGestureDetector(getContext(), callback);
+        final ViewConfiguration configuration = ViewConfiguration.get(getContext());
+        int touchSlop = configuration.getScaledPagingTouchSlop();
+        mGestureDetector.setScrollSlop(touchSlop / 2);
         mScaleGestureDetector = new ScaleGestureDetector(getContext(), callback);
     }
 
@@ -239,20 +243,6 @@ public class BeyondImageView extends ImageView {
      */
     public void setDoubleTabScale(float scale) {
         mDoubleTabScale = scale;
-    }
-
-    @Override
-    public boolean canScrollHorizontally(int direction) {
-        if (direction < 0) {
-            mMatrix.mapRect(mTempRect2, mInitRect);
-            Log.d(TAG, "canScrollHorizontally: direction=" + direction + ",mTempRect2.left=" + mTempRect2.left);
-            return mTempRect2.left < mViewRect.left;
-        } else if (direction > 0) {
-            mMatrix.mapRect(mTempRect2, mInitRect);
-            Log.d(TAG, "canScrollHorizontally: direction=" + direction + ",mTempRect2.right=" + mTempRect2.right);
-            return mTempRect2.right > mViewRect.right;
-        }
-        return super.canScrollHorizontally(direction);
     }
 
     @Override
@@ -547,7 +537,7 @@ public class BeyondImageView extends ImageView {
         return new float[]{px, py};
     }
 
-    private class GestureCallback extends GestureDetector.SimpleOnGestureListener implements ScaleGestureDetector.OnScaleGestureListener {
+    private class GestureCallback extends BeyondGestureDetector.SimpleOnGestureListener implements ScaleGestureDetector.OnScaleGestureListener {
 
         @Override
         public boolean onScale(ScaleGestureDetector detector) {
@@ -655,6 +645,9 @@ public class BeyondImageView extends ImageView {
             if (vRect.top <= mTempRect.top && vRect.bottom >= mTempRect.bottom) {
                 velocityY = 0;
             }
+
+            Log.d(TAG, "onFling: vx=" + velocityX + ",vy=" + velocityY);
+
             int startX = 0;
             int startY = 0;
             int minX = 0;
@@ -702,22 +695,28 @@ public class BeyondImageView extends ImageView {
         }
 
         @Override
-        public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
+        public boolean onScroll(MotionEvent e1, MotionEvent e2, float dx, float dy) {
 
             mMatrix.mapRect(mTempRect, mInitRect);
             final Rect vRect = mViewRect;
             if (vRect.left <= mTempRect.left && vRect.right >= mTempRect.right) {
-                distanceX = 0;
+                dx = 0;
             }
             if (vRect.top <= mTempRect.top && vRect.bottom >= mTempRect.bottom) {
-                distanceY = 0;
+                dy = 0;
             }
+            dx = -dx;
+            dy = -dy;
 
-            distanceX = -distanceX;
-            distanceY = -distanceY;
-            mTempRect.offset(distanceX, distanceY);
+            Log.d(TAG, "onScroll: dx=" + dx + ",dy=" + dy + ",tempRect=" + mTempRect + ",vrect=" + mViewRect);
+            if (dx < 0) {
+                getParent().requestDisallowInterceptTouchEvent(mTempRect.right > vRect.right);
+            } else {
+                getParent().requestDisallowInterceptTouchEvent(mTempRect.left < vRect.left);
+            }
+            mTempRect.offset(dx, dy);
 
-            if (distanceX != 0) {
+            if (dx != 0) {
                 int maxLeft;
                 int minRight;
                 if (mOverScrollEnabled) {
@@ -728,13 +727,13 @@ public class BeyondImageView extends ImageView {
                     minRight = vRect.right;
                 }
                 if (mTempRect.left > maxLeft) {
-                    distanceX += (maxLeft - mTempRect.left);
+                    dx += (maxLeft - mTempRect.left);
                 }
                 if (mTempRect.right < minRight) {
-                    distanceX += (minRight - mTempRect.right);
+                    dx += (minRight - mTempRect.right);
                 }
             }
-            if (distanceY != 0) {
+            if (dy != 0) {
                 int maxTop;
                 int minBottom;
                 if (mOverScrollEnabled) {
@@ -745,14 +744,14 @@ public class BeyondImageView extends ImageView {
                     minBottom = vRect.bottom;
                 }
                 if (mTempRect.top > maxTop) {
-                    distanceY += (maxTop - mTempRect.top);
+                    dy += (maxTop - mTempRect.top);
                 }
                 if (mTempRect.bottom < minBottom) {
-                    distanceY += (minBottom - mTempRect.bottom);
+                    dy += (minBottom - mTempRect.bottom);
                 }
             }
-            if (distanceX != 0 || distanceY != 0) {
-                mMatrix.postTranslate(distanceX, distanceY);
+            if (dx != 0 || dy != 0) {
+                mMatrix.postTranslate(dx, dy);
                 invalidate();
             }
             return true;
