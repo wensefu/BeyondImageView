@@ -6,6 +6,7 @@ import android.animation.PropertyValuesHolder;
 import android.animation.ValueAnimator;
 import android.annotation.TargetApi;
 import android.content.Context;
+import android.content.res.TypedArray;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.Rect;
@@ -21,6 +22,7 @@ import android.view.animation.Interpolator;
 import android.widget.ImageView;
 import android.widget.OverScroller;
 
+import com.beyondsw.fastimages.R;
 import com.beyondsw.widget.gesture.BeyondGestureDetector;
 
 import java.lang.reflect.Field;
@@ -34,8 +36,11 @@ public class BeyondImageView extends ImageView {
     private static final boolean LOG_ENABLE = true;
     private static final float MAX_SCALE = 3f;
     private static final float DOUBLE_TAB_SCALE = 2.5f;
-    private float mMaxScale = MAX_SCALE;
-    private float mDoubleTabScale = DOUBLE_TAB_SCALE;
+    private float mMaxScale;
+    private float mUserMaxScale;
+    private float mDoubleTabScale;
+    private float mUserDoubleTabScale;
+    private boolean mDoubleTabAdjustBounds;
     private Matrix mMatrix;
     private Matrix mTempMatrix;
     private ValueAnimator mScaleAnimator;
@@ -56,9 +61,10 @@ public class BeyondImageView extends ImageView {
     private int mFlingOverScrollY;
     private int mOverScrollX;
     private int mOverScrollY;
-    private boolean mFlingOverScrollEnabled = true;
-    private boolean mOverScrollEnabled = true;
+    private boolean mFlingOverScrollEnabled;
+    private boolean mOverScrollEnabled;
     private Rect mViewRect;
+
 
     public BeyondImageView(Context context) {
         this(context, null);
@@ -66,6 +72,18 @@ public class BeyondImageView extends ImageView {
 
     public BeyondImageView(Context context, AttributeSet attrs) {
         super(context, attrs);
+
+        TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.BeyondImageView);
+        mDoubleTabScale = mUserDoubleTabScale = a.getFloat(R.styleable.BeyondImageView_doubleTabScale, DOUBLE_TAB_SCALE);
+        mDoubleTabAdjustBounds = a.getBoolean(R.styleable.BeyondImageView_doubleTabAdjustBounds, false);
+        mUserMaxScale = mMaxScale = a.getFloat(R.styleable.BeyondImageView_maxScale, MAX_SCALE);
+        if (mMaxScale < mDoubleTabScale) {
+            throw new IllegalArgumentException("maxScale should not be smaller than doubleTabScale");
+        }
+        mFlingOverScrollEnabled = a.getBoolean(R.styleable.BeyondImageView_flingOverScrollEnabled, true);
+        mOverScrollEnabled = a.getBoolean(R.styleable.BeyondImageView_scrollOverScrollEnabled, true);
+        a.recycle();
+
         init();
     }
 
@@ -223,6 +241,18 @@ public class BeyondImageView extends ImageView {
         updateViewRect();
         initMatrix();
         updateOverScroll();
+        updateDoubleTabScale();
+    }
+
+    private void updateDoubleTabScale() {
+        if (mDoubleTabAdjustBounds) {
+            float scaleX = getWidth() / mInitRect.width();
+            float scaleY = getHeight() / mInitRect.height();
+            mDoubleTabScale = Math.max(scaleX, scaleY);
+            if (mMaxScale < mDoubleTabScale) {
+                mMaxScale = mDoubleTabScale;
+            }
+        }
     }
 
     private void initGestureDetector() {
@@ -334,9 +364,9 @@ public class BeyondImageView extends ImageView {
         }
 
         if (dy != 0) {
-            PropertyValuesHolder vx = PropertyValuesHolder.ofFloat("tx",0,dx);
-            PropertyValuesHolder vy = PropertyValuesHolder.ofFloat("ty",0,dy);
-            mFixTranslationAnimator = ValueAnimator.ofPropertyValuesHolder(vx,vy).setDuration(220);
+            PropertyValuesHolder vx = PropertyValuesHolder.ofFloat("tx", 0, dx);
+            PropertyValuesHolder vy = PropertyValuesHolder.ofFloat("ty", 0, dy);
+            mFixTranslationAnimator = ValueAnimator.ofPropertyValuesHolder(vx, vy).setDuration(220);
             mFixTranslationAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                 float ty = 0;
                 float tx = 0;

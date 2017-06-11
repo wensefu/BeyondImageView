@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="BeyondImageView">
+        <attr name="doubleTabScale" format="float" />
+        <attr name="maxScale" format="float" />
+        <attr name="doubleTabAdjustBounds" format="boolean"/>
+        <attr name="flingOverScrollEnabled" format="boolean"/>
+        <attr name="scrollOverScrollEnabled" format="boolean"/>
+    </declare-styleable>
+</resources>
