@@ -66,6 +66,9 @@ public class BeyondImageView extends ImageView {
     private Rect mViewRect;
     private float mMaxVelocity;
     private float mMinVelocity;
+    private boolean mFlingX;
+    private boolean mFlingY;
+    private Animator mFixEdgeAnimator;
 
 
     public BeyondImageView(Context context) {
@@ -235,6 +238,14 @@ public class BeyondImageView extends ImageView {
         }
     }
 
+    private void mapRectInt() {
+        mMatrix.mapRect(mTempRect, mInitRect);
+        mTempRect.left = Math.round(mTempRect.left);
+        mTempRect.top = Math.round(mTempRect.top);
+        mTempRect.right = Math.round(mTempRect.right);
+        mTempRect.bottom = Math.round(mTempRect.bottom);
+    }
+
     private void updateOverScroll() {
         mFlingOverScrollX = Math.round(mViewRect.width() * FLING_OVER_SCROLL_FACTOR);
         mFlingOverScrollY = Math.round(mViewRect.height() * FLING_OVER_SCROLL_FACTOR);
@@ -298,11 +309,11 @@ public class BeyondImageView extends ImageView {
                 initGestureDetector();
             }
         }
-        mGestureDetector.onTouchEvent(event);
-        mScaleGestureDetector.onTouchEvent(event);
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
             animToEdgeIfNeeded();
         }
+        mGestureDetector.onTouchEvent(event);
+        mScaleGestureDetector.onTouchEvent(event);
         return true;
     }
 
@@ -312,35 +323,50 @@ public class BeyondImageView extends ImageView {
             Log.d(TAG, "animToEdgeIfNeeded: isScaling=" + isScaling() + ",isTransing=" + isTransing());
             return;
         }
-        if (!mScroller.isFinished()) {
-            Log.d(TAG, "animToEdgeIfNeeded: !mScroller.isFinished() return");
+        final boolean flingX = mFlingX;
+        final boolean flingY = mFlingY;
+        Log.d(TAG, "animToEdgeIfNeeded: flingx=" + mFlingX + ",flingy=" + mFlingY);
+        if (mFlingX && mFlingY) {
             return;
         }
-        mMatrix.mapRect(mTempRect, mInitRect);
+        mapRectInt();
 
-        float dx = 0;
-        float dy = 0;
         final Rect vRect = mViewRect;
-        if (mTempRect.left > vRect.left && (Math.round(mTempRect.right - vRect.right) >= Math.round(mTempRect.left - vRect.left))) {
-            dx = vRect.left - mTempRect.left;
-        }
-        if (mTempRect.right < vRect.right && (Math.round(vRect.left - mTempRect.left) >= Math.round(vRect.right - mTempRect.right))) {
-            dx = vRect.right - mTempRect.right;
-        }
-        if (mTempRect.top > vRect.top && (Math.round(mTempRect.bottom - vRect.bottom) >= Math.round(mTempRect.top - vRect.top))) {
-            dy = vRect.top - mTempRect.top;
-        }
-
-        if (mTempRect.bottom < vRect.bottom && (Math.round(vRect.top - mTempRect.top) >= Math.round(vRect.bottom - mTempRect.bottom))) {
-            dy = vRect.bottom - mTempRect.bottom;
+        float dx = 0;
+        if (!flingX) {
+            if (mTempRect.left > vRect.left && ((mTempRect.right - vRect.right) >= (mTempRect.left - vRect.left))) {
+                dx = vRect.left - mTempRect.left;
+            }
+            if (mTempRect.right < vRect.right && ((vRect.left - mTempRect.left) >= (vRect.right - mTempRect.right))) {
+                dx = vRect.right - mTempRect.right;
+            }
         }
 
-        Log.d(TAG, "animToEdgeIfNeeded:dx="+dx+",dy="+dy+",vrect="+vRect+",tempRect="+mTempRect);
+        float dy = 0;
+        if (!flingY) {
+            if (mTempRect.top > vRect.top && ((mTempRect.bottom - vRect.bottom) >= (mTempRect.top - vRect.top))) {
+                dy = vRect.top - mTempRect.top;
+            }
+
+            if (mTempRect.bottom < vRect.bottom && ((vRect.top - mTempRect.top) >= (vRect.bottom - mTempRect.bottom))) {
+                dy = vRect.bottom - mTempRect.bottom;
+            }
+        }
+
+        Log.d(TAG, "animToEdgeIfNeeded:dx=" + dx + ",dy=" + dy + ",vrect=" + vRect + ",tempRect=" + mTempRect);
 
         if (dx != 0 || dy != 0) {
             final PropertyValuesHolder xph = PropertyValuesHolder.ofFloat("x", 0, dx);
             final PropertyValuesHolder yph = PropertyValuesHolder.ofFloat("y", 0, dy);
-            final ValueAnimator animator = ValueAnimator.ofPropertyValuesHolder(xph, yph).setDuration(300);
+            final ValueAnimator animator;
+            if (!flingX && flingY) {
+                animator = ValueAnimator.ofPropertyValuesHolder(xph);
+            } else if (flingX) {
+                animator = ValueAnimator.ofPropertyValuesHolder(yph);
+            } else {
+                animator = ValueAnimator.ofPropertyValuesHolder(xph, yph);
+            }
+            animator.setDuration(300);
             animator.setInterpolator(new ViscousFluidInterpolator());
             animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                 float prevdx = 0;
@@ -348,27 +374,33 @@ public class BeyondImageView extends ImageView {
 
                 @Override
                 public void onAnimationUpdate(ValueAnimator animation) {
-                    float dx = (float) animation.getAnimatedValue("x");
-                    float dy = (float) animation.getAnimatedValue("y");
-                    mMatrix.postTranslate(dx - prevdx, dy - prevdy);
+                    if (!flingX) {
+                        float dx = (float) animation.getAnimatedValue("x");
+                        mMatrix.postTranslate(dx - prevdx, 0);
+                        prevdx = dx;
+                    }
+                    if (!flingY) {
+                        float dy = (float) animation.getAnimatedValue("y");
+                        mMatrix.postTranslate(0, dy - prevdy);
+                        prevdy = dy;
+                    }
                     invalidate();
-                    prevdx = dx;
-                    prevdy = dy;
                 }
             });
             animator.addListener(new AnimatorListenerAdapter() {
                 @Override
                 public void onAnimationEnd(Animator animation) {
-                    mMatrix.mapRect(mTempRect,mInitRect);
-                    Log.d(TAG, "animToEdgeIfNeeded onAnimationEnd,mTempRect="+mTempRect);
+                    mMatrix.mapRect(mTempRect, mInitRect);
+                    Log.d(TAG, "animToEdgeIfNeeded onAnimationEnd,mTempRect=" + mTempRect);
                 }
             });
+            mFixEdgeAnimator = animator;
             animator.start();
         }
     }
 
     private void animTranslationToInit() {
-        mMatrix.mapRect(mTempRect, mInitRect);
+        mapRectInt();
         final ScaleType scaleType = getScaleType();
         final Rect viewRect = mViewRect;
         float dx = 0;
@@ -384,10 +416,10 @@ public class BeyondImageView extends ImageView {
             Log.d(TAG, "animTranslationToInit: 3");
         }
 
-        if (mTempRect.left > viewRect.left && (Math.round(mTempRect.right - viewRect.right) >= Math.round(mTempRect.left - viewRect.left))) {
+        if (mTempRect.left > viewRect.left && ((mTempRect.right - viewRect.right) >= (mTempRect.left - viewRect.left))) {
             dx = viewRect.left - mTempRect.left;
         }
-        if (mTempRect.right < viewRect.right && (Math.round(viewRect.left - mTempRect.left) >= Math.round(viewRect.right - mTempRect.right))) {
+        if (mTempRect.right < viewRect.right && ((viewRect.left - mTempRect.left) >= (viewRect.right - mTempRect.right))) {
             dx = viewRect.right - mTempRect.right;
         }
 
@@ -412,9 +444,7 @@ public class BeyondImageView extends ImageView {
             mFixTranslationAnimator.addListener(new AnimatorListenerAdapter() {
                 @Override
                 public void onAnimationEnd(Animator animation) {
-                    mMatrix.mapRect(mTempRect, mInitRect);
-                    Log.d(TAG, "onAnimationEnd: mTempRect.cx=" + mTempRect.centerX() + ",vrect.cx=" + mViewRect.centerX());
-                    Log.d(TAG, "onAnimationEnd: mTempRect.cy=" + mTempRect.centerY() + ",vrect.cy=" + mViewRect.centerY());
+                    Log.d(TAG, "animTranslationToInit onAnimationEnd");
                 }
             });
             mFixTranslationAnimator.start();
@@ -435,7 +465,7 @@ public class BeyondImageView extends ImageView {
      * If the value is below the minimum, it will be clamped to zero.
      * If the value is above the maximum, it will be clamped to the maximum.
      *
-     * @param value Value to clamp
+     * @param value  Value to clamp
      * @param absMin Absolute value of the minimum significant value to return
      * @param absMax Absolute value of the maximum value to return
      * @return The clamped value with the same sign as <code>value</code>
@@ -465,6 +495,8 @@ public class BeyondImageView extends ImageView {
 
         void start() {
             mScroller.fling(startX, startY, vx, vy, minX, maxX, minY, maxY, overX, overY);
+            Log.d(TAG, "onFling: minY=" + minY + ",maxY=" + maxY + ",minX=" + minX + ",maxX=" + maxX + ",vx=" + vx + ",vy=" + vy);
+            Log.d(TAG, "onFling,endX=" + mScroller.getFinalX() + ",endY=" + mScroller.getFinalY());
             if (Build.VERSION.SDK_INT >= 16) {
                 postOnAnimation(this);
             } else {
@@ -525,6 +557,10 @@ public class BeyondImageView extends ImageView {
         @Override
         public void run() {
             if (mScroller.isFinished()) {
+                mMatrix.mapRect(mTempRect, mInitRect);
+                Log.d(TAG, "run: mScroller.isFinished(),mTempRect=" + mTempRect + ",vRect=" + mViewRect);
+                mFlingY = false;
+                mFlingX = false;
                 return;
             }
             if (mScroller.computeScrollOffset()) {
@@ -533,7 +569,6 @@ public class BeyondImageView extends ImageView {
                 int diffX = newX - oldX;
                 int diffY = newY - oldY;
                 if (diffX != 0 || diffY != 0) {
-                    log(TAG, "FlingRunnable,diffX=" + diffX + ",diffY=" + diffY);
                     mMatrix.postTranslate(diffX, diffY);
                     invalidate();
                     oldX = newX;
@@ -544,6 +579,10 @@ public class BeyondImageView extends ImageView {
                 } else {
                     post(this);
                 }
+            } else {
+                Log.d(TAG, "run: fling done");
+                mFlingY = false;
+                mFlingX = false;
             }
         }
     }
@@ -554,6 +593,10 @@ public class BeyondImageView extends ImageView {
 
     private boolean isTransing() {
         return mFixTranslationAnimator != null && mFixTranslationAnimator.isRunning();
+    }
+
+    private boolean isFixingEdge() {
+        return mFixEdgeAnimator != null && mFixEdgeAnimator.isRunning();
     }
 
     private void doScaleAnim(final float px, final float py, float toScale) {
@@ -677,7 +720,7 @@ public class BeyondImageView extends ImageView {
                 mTempMatrix.set(mMatrix);
                 final float targetScale = mMaxScale / mScale;
                 mTempMatrix.postScale(targetScale, targetScale, mScaleBeginPx, mScaleBeginPy);
-                mTempMatrix.mapRect(mTempRect, mInitRect);
+                mapRectInt();
                 final Rect viewRect = mViewRect;
                 final boolean fillHorizontal = mTempRect.left <= viewRect.left && mTempRect.right >= viewRect.right;
                 final boolean fillVertical = mTempRect.top <= viewRect.top && mTempRect.bottom >= viewRect.bottom;
@@ -716,7 +759,7 @@ public class BeyondImageView extends ImageView {
                 }
             } else {
                 Log.d(TAG, "onScaleEnd: 3");
-                mMatrix.mapRect(mTempRect, mInitRect);
+                mapRectInt();
                 if (!isFillWithImage(mTempRect)) {
                     Log.d(TAG, "onScaleEnd: 31");
                     animTranslationToInit();
@@ -742,6 +785,7 @@ public class BeyondImageView extends ImageView {
         public boolean onDown(MotionEvent e) {
             if (mScroller != null && !mScroller.isFinished()) {
                 mScroller.forceFinished(true);
+                Log.d(TAG, "onDown: forceFinished");
             }
             return true;
         }
@@ -753,18 +797,24 @@ public class BeyondImageView extends ImageView {
                 Log.d(TAG, "onFling: return on scaling | transing");
                 return true;
             }
-            mMatrix.mapRect(mTempRect, mInitRect);
+            mapRectInt();
             final Rect vRect = mViewRect;
-            Log.d(TAG, "onFling:vx=" + velocityX + ",vy=" + velocityY + ",mTempRect=" + mTempRect + ",vrect=" + mViewRect);
             if (vRect.left <= mTempRect.left && vRect.right >= mTempRect.right) {
-                velocityX = 0;
+                if (!mFlingOverScrollEnabled) {
+                    velocityX = 0;
+                }
             }
             if (vRect.top <= mTempRect.top && vRect.bottom >= mTempRect.bottom) {
-                velocityY = 0;
+                if (!mFlingOverScrollEnabled) {
+                    velocityY = 0;
+                }
             }
 
             velocityX = clampMag(velocityX, mMinVelocity, mMaxVelocity);
             velocityY = clampMag(velocityY, mMinVelocity, mMaxVelocity);
+
+            Log.d(TAG, "onFling:vx=" + velocityX + ",vy=" + velocityY + ",mTempRect=" + mTempRect + ",vrect=" + mViewRect);
+
 
             int startX = 0;
             int startY = 0;
@@ -773,18 +823,26 @@ public class BeyondImageView extends ImageView {
             int maxX = 0;
             int maxY = 0;
             if (velocityX > 0) {
-                minX = 0;
-                maxX = -Math.round(mTempRect.left);
+                if (vRect.left >= mTempRect.left) {
+                    minX = 0;
+                    maxX = (int) (vRect.left - mTempRect.left);
+                }
             } else if (velocityX < 0) {
-                minX = Math.round(getWidth() - getPaddingLeft() - getPaddingRight() - mTempRect.right);
-                maxX = 0;
+                if (vRect.right <= mTempRect.right) {
+                    minX = (int) (vRect.right - mTempRect.right);
+                    maxX = 0;
+                }
             }
             if (velocityY > 0) {
-                minY = 0;
-                maxY = -Math.round(mTempRect.top);
+                if (vRect.top >= mTempRect.top) {
+                    minY = 0;
+                    maxY = (int) (vRect.top - mTempRect.top);
+                }
             } else if (velocityY < 0) {
-                minY = Math.round(getHeight() - getPaddingTop() - getPaddingBottom() - mTempRect.bottom);
-                maxY = 0;
+                if (vRect.bottom <= mTempRect.bottom) {
+                    minY = (int) (vRect.bottom - mTempRect.bottom);
+                    maxY = 0;
+                }
             }
             if (velocityX != 0 || velocityY != 0) {
                 final int overX;
@@ -796,6 +854,8 @@ public class BeyondImageView extends ImageView {
                     overX = 0;
                     overY = 0;
                 }
+                mFlingX = velocityX != 0;
+                mFlingY = velocityY != 0;
                 new FlingRunnable()
                         .startX(startX)
                         .startY(startY)
@@ -822,13 +882,17 @@ public class BeyondImageView extends ImageView {
                 Log.d(TAG, "onScroll: transing,return");
                 return true;
             }
-            mMatrix.mapRect(mTempRect, mInitRect);
+            mapRectInt();
             final Rect vRect = mViewRect;
             if (vRect.left <= mTempRect.left && vRect.right >= mTempRect.right) {
-                dx = 0;
+                if (!mOverScrollEnabled) {
+                    dx = 0;
+                }
             }
             if (vRect.top <= mTempRect.top && vRect.bottom >= mTempRect.bottom) {
-                dy = 0;
+                if (!mOverScrollEnabled) {
+                    dy = 0;
+                }
             }
             dx = -dx;
             dy = -dy;
@@ -841,40 +905,36 @@ public class BeyondImageView extends ImageView {
             }
             mTempRect.offset(dx, dy);
 
-            if (dx != 0) {
-                int maxLeft;
-                int minRight;
-                if (mOverScrollEnabled) {
-                    maxLeft = vRect.left + mOverScrollX;
-                    minRight = vRect.right - mOverScrollX;
-                } else {
-                    maxLeft = vRect.left;
-                    minRight = vRect.right;
-                }
-                if (mTempRect.left > maxLeft) {
-                    dx += (maxLeft - mTempRect.left);
-                }
-                if (mTempRect.right < minRight) {
-                    dx += (minRight - mTempRect.right);
-                }
+            int maxLeft;
+            int minRight;
+            if (mOverScrollEnabled) {
+                maxLeft = vRect.left + mOverScrollX;
+                minRight = vRect.right - mOverScrollX;
+            } else {
+                maxLeft = vRect.left;
+                minRight = vRect.right;
+            }
+            if (mTempRect.left > maxLeft) {
+                dx += (maxLeft - mTempRect.left);
+            }
+            if (mTempRect.right < minRight) {
+                dx += (minRight - mTempRect.right);
             }
 
-            if (dy != 0) {
-                int maxTop;
-                int minBottom;
-                if (mOverScrollEnabled) {
-                    maxTop = vRect.top + mOverScrollY;
-                    minBottom = vRect.bottom - mOverScrollY;
-                } else {
-                    maxTop = vRect.top;
-                    minBottom = vRect.bottom;
-                }
-                if (mTempRect.top > maxTop) {
-                    dy += (maxTop - mTempRect.top);
-                }
-                if (mTempRect.bottom < minBottom) {
-                    dy += (minBottom - mTempRect.bottom);
-                }
+            int maxTop;
+            int minBottom;
+            if (mOverScrollEnabled) {
+                maxTop = vRect.top + mOverScrollY;
+                minBottom = vRect.bottom - mOverScrollY;
+            } else {
+                maxTop = vRect.top;
+                minBottom = vRect.bottom;
+            }
+            if (mTempRect.top > maxTop) {
+                dy += (maxTop - mTempRect.top);
+            }
+            if (mTempRect.bottom < minBottom) {
+                dy += (minBottom - mTempRect.bottom);
             }
             if (dx != 0 || dy != 0) {
                 Log.d(TAG, "onScroll: dx=" + dx + ",dy=" + dy);
