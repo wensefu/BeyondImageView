@@ -82,6 +82,7 @@ public class BeyondImageView extends ImageView {
         mDoubleTabScale = mUserDoubleTabScale = a.getFloat(R.styleable.BeyondImageView_doubleTabScale, DOUBLE_TAB_SCALE);
         mDoubleTabAdjustBounds = a.getBoolean(R.styleable.BeyondImageView_doubleTabAdjustBounds, false);
         mUserMaxScale = mMaxScale = a.getFloat(R.styleable.BeyondImageView_maxScale, MAX_SCALE);
+        Log.d(TAG, "BeyondImageView: mMaxScale=" + mMaxScale);
         if (mMaxScale < mDoubleTabScale) {
             throw new IllegalArgumentException("maxScale should not be smaller than doubleTabScale");
         }
@@ -263,12 +264,16 @@ public class BeyondImageView extends ImageView {
     }
 
     private void updateDoubleTabScale() {
+        if (mInitRect.width() == 0) {
+            return;
+        }
         if (mDoubleTabAdjustBounds) {
             float scaleX = getWidth() / mInitRect.width();
             float scaleY = getHeight() / mInitRect.height();
             mDoubleTabScale = Math.max(scaleX, scaleY);
             if (mMaxScale < mDoubleTabScale) {
                 mMaxScale = mDoubleTabScale;
+                Log.d(TAG, "updateDoubleTabScale: mMaxScale=" + mMaxScale);
             }
         }
     }
@@ -297,6 +302,7 @@ public class BeyondImageView extends ImageView {
             if (!adjustBounds) {
                 mDoubleTabScale = mUserDoubleTabScale;
                 mMaxScale = mUserMaxScale;
+                Log.d(TAG, "setDoubleTabAdjustBounds: mMaxScale=" + mMaxScale);
             }
         }
     }
@@ -505,12 +511,12 @@ public class BeyondImageView extends ImageView {
         }
 
         FlingRunnable startX(int startX) {
-            this.startX = startX;
+            this.oldX = this.startX = startX;
             return this;
         }
 
         FlingRunnable startY(int startY) {
-            this.startY = startY;
+            this.oldY = this.startY = startY;
             return this;
         }
 
@@ -823,25 +829,29 @@ public class BeyondImageView extends ImageView {
             int maxX = 0;
             int maxY = 0;
             if (velocityX > 0) {
-                if (vRect.left >= mTempRect.left) {
-                    minX = 0;
-                    maxX = (int) (vRect.left - mTempRect.left);
+                if (mTempRect.left < vRect.left && mTempRect.right > vRect.right) {
+                    maxX = vRect.left - Math.round(mTempRect.left);
+                } else {
+                    velocityX = 0;
                 }
             } else if (velocityX < 0) {
-                if (vRect.right <= mTempRect.right) {
-                    minX = (int) (vRect.right - mTempRect.right);
-                    maxX = 0;
+                if (mTempRect.left < vRect.left && mTempRect.right > vRect.right) {
+                    minX = vRect.right - Math.round(mTempRect.right);
+                } else {
+                    velocityX = 0;
                 }
             }
             if (velocityY > 0) {
-                if (vRect.top >= mTempRect.top) {
-                    minY = 0;
-                    maxY = (int) (vRect.top - mTempRect.top);
+                if (mTempRect.bottom > vRect.bottom && mTempRect.top < vRect.top) {
+                    maxY = vRect.top - Math.round(mTempRect.top);
+                } else {
+                    velocityY = 0;
                 }
             } else if (velocityY < 0) {
-                if (vRect.bottom <= mTempRect.bottom) {
-                    minY = (int) (vRect.bottom - mTempRect.bottom);
-                    maxY = 0;
+                if (mTempRect.bottom > vRect.bottom && mTempRect.top < vRect.top) {
+                    minY = vRect.bottom - Math.round(mTempRect.bottom);
+                } else {
+                    velocityY = 0;
                 }
             }
             if (velocityX != 0 || velocityY != 0) {
