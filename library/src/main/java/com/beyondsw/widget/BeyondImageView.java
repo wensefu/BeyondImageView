@@ -726,7 +726,7 @@ public class BeyondImageView extends ImageView {
                 mTempMatrix.set(mMatrix);
                 final float targetScale = mMaxScale / mScale;
                 mTempMatrix.postScale(targetScale, targetScale, mScaleBeginPx, mScaleBeginPy);
-                mapRectInt();
+                mTempMatrix.mapRect(mTempRect, mInitRect);
                 final Rect viewRect = mViewRect;
                 final boolean fillHorizontal = mTempRect.left <= viewRect.left && mTempRect.right >= viewRect.right;
                 final boolean fillVertical = mTempRect.top <= viewRect.top && mTempRect.bottom >= viewRect.bottom;
