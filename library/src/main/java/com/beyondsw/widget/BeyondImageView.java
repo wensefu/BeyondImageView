@@ -69,6 +69,7 @@ public class BeyondImageView extends ImageView {
     private boolean mFlingX;
     private boolean mFlingY;
     private Animator mFixEdgeAnimator;
+    private boolean mMulTouchScaling;
 
 
     public BeyondImageView(Context context) {
@@ -594,7 +595,7 @@ public class BeyondImageView extends ImageView {
     }
 
     private boolean isScaling() {
-        return mScaleAnimator != null && mScaleAnimator.isRunning();
+        return mMulTouchScaling || (mScaleAnimator != null && mScaleAnimator.isRunning());
     }
 
     private boolean isTransing() {
@@ -707,6 +708,7 @@ public class BeyondImageView extends ImageView {
 
         @Override
         public boolean onScaleBegin(ScaleGestureDetector detector) {
+            mMulTouchScaling = true;
             mScaleBeginPx = detector.getFocusX();
             mScaleBeginPy = detector.getFocusY();
             if (mScaleAnimator != null && mScaleAnimator.isRunning()) {
@@ -771,6 +773,7 @@ public class BeyondImageView extends ImageView {
                     animTranslationToInit();
                 }
             }
+            mMulTouchScaling = false;
         }
 
         @Override
