@@ -36,6 +36,7 @@ public class BeyondImageView extends ImageView {
     private static final boolean LOG_ENABLE = true;
     private static final float MAX_SCALE = 3f;
     private static final float DOUBLE_TAB_SCALE = 2.5f;
+    private static final float SCALE_SPEED = 1.02f;
     private float mMaxScale;
     private float mUserMaxScale;
     private float mDoubleTabScale;
@@ -700,6 +701,11 @@ public class BeyondImageView extends ImageView {
         @Override
         public boolean onScale(ScaleGestureDetector detector) {
             float factor = detector.getScaleFactor();
+            if (factor > 1) {
+                factor *= SCALE_SPEED;
+            } else if (factor < 1) {
+                factor /= SCALE_SPEED;
+            }
             mMatrix.postScale(factor, factor, detector.getFocusX(), detector.getFocusY());
             invalidate();
             mScale *= factor;
