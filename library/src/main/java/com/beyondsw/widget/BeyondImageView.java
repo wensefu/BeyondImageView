@@ -398,11 +398,11 @@ public class BeyondImageView extends ImageView {
             animator.addListener(new AnimatorListenerAdapter() {
                 @Override
                 public void onAnimationEnd(Animator animation) {
-                    setLayerType(LAYER_TYPE_NONE,null);
+                    setLayerType(LAYER_TYPE_NONE, null);
                 }
             });
             mFixEdgeAnimator = animator;
-            setLayerType(LAYER_TYPE_HARDWARE,null);
+            setLayerType(LAYER_TYPE_HARDWARE, null);
             animator.start();
         }
     }
@@ -453,10 +453,10 @@ public class BeyondImageView extends ImageView {
                 @Override
                 public void onAnimationEnd(Animator animation) {
                     Log.d(TAG, "animTranslationToInit onAnimationEnd");
-                    setLayerType(LAYER_TYPE_NONE,null);
+                    setLayerType(LAYER_TYPE_NONE, null);
                 }
             });
-            setLayerType(LAYER_TYPE_HARDWARE,null);
+            setLayerType(LAYER_TYPE_HARDWARE, null);
             mFixTranslationAnimator.start();
         }
     }
@@ -625,12 +625,12 @@ public class BeyondImageView extends ImageView {
             @Override
             public void onAnimationEnd(Animator animation) {
                 super.onAnimationCancel(animation);
-                setLayerType(LAYER_TYPE_NONE,null);
+                setLayerType(LAYER_TYPE_NONE, null);
                 Log.d(TAG, "doScaleAnim onAnimationEnd");
             }
         });
         mScaleAnimator.setInterpolator(new ViscousFluidInterpolator());
-        setLayerType(LAYER_TYPE_HARDWARE,null);
+        setLayerType(LAYER_TYPE_HARDWARE, null);
         mScaleAnimator.start();
     }
 
@@ -903,6 +903,9 @@ public class BeyondImageView extends ImageView {
             }
             if (isTransing()) {
                 Log.d(TAG, "onScroll: transing,return");
+                return true;
+            }
+            if (mScale <= 1) {
                 return true;
             }
             mapRectInt();
