@@ -26,6 +26,8 @@ import com.beyondsw.fastimages.R;
 import com.beyondsw.widget.gesture.BeyondGestureDetector;
 
 import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Created by wensefu on 17-3-28.
@@ -72,6 +74,9 @@ public class BeyondImageView extends ImageView {
     private Animator mFixEdgeAnimator;
     private boolean mMulTouchScaling;
 
+    private List<Listener> mListeners;
+
+    private boolean mStolenTouch;
 
     public BeyondImageView(Context context) {
         this(context, null);
@@ -93,6 +98,52 @@ public class BeyondImageView extends ImageView {
         a.recycle();
 
         init();
+    }
+
+    public interface Listener {
+        void onRequestDisallowInterceptTouchEvent(BeyondImageView imageView, boolean disallow);
+
+        void onScroll(BeyondImageView imageView, float dx, float dy);
+
+        void onDown();
+
+        void onUp();
+    }
+
+    public static class SimpleListener implements Listener {
+
+        @Override
+        public void onRequestDisallowInterceptTouchEvent(BeyondImageView imageView, boolean disallow) {
+
+        }
+
+        @Override
+        public void onScroll(BeyondImageView imageView, float dx, float dy) {
+
+        }
+
+        @Override
+        public void onDown() {
+
+        }
+
+        @Override
+        public void onUp() {
+
+        }
+    }
+
+    public void addListener(Listener listener) {
+        if (mListeners == null) {
+            mListeners = new ArrayList<>();
+        }
+        mListeners.add(listener);
+    }
+
+    public void removeListener(Listener listener) {
+        if (mListeners != null) {
+            mListeners.remove(listener);
+        }
     }
 
     private static class ViscousFluidInterpolator implements Interpolator {
@@ -285,8 +336,19 @@ public class BeyondImageView extends ImageView {
         mGestureDetector = new BeyondGestureDetector(getContext(), callback);
         final ViewConfiguration configuration = ViewConfiguration.get(getContext());
         int touchSlop = configuration.getScaledPagingTouchSlop();
-        mGestureDetector.setScrollSlop(touchSlop / 2);
+        mGestureDetector.setScrollSlop(touchSlop);
         mScaleGestureDetector = new ScaleGestureDetector(getContext(), callback);
+    }
+
+    /**
+     * 获取当前图像显示的区域
+     *
+     * @return
+     */
+    public RectF getImageRect() {
+        RectF r = new RectF();
+        mMatrix.mapRect(r, mInitRect);
+        return r;
     }
 
     /**
@@ -312,7 +374,9 @@ public class BeyondImageView extends ImageView {
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         final int action = event.getAction() & MotionEvent.ACTION_MASK;
+        Log.d(TAG, "onTouchEvent: action=" + action);
         if (action == MotionEvent.ACTION_DOWN) {
+            getParent().requestDisallowInterceptTouchEvent(true);
             if (mGestureDetector == null) {
                 initGestureDetector();
             }
@@ -897,17 +961,7 @@ public class BeyondImageView extends ImageView {
 
         @Override
         public boolean onScroll(MotionEvent e1, MotionEvent e2, float dx, float dy) {
-            if (isScaling()) {
-                Log.d(TAG, "onScroll: scaling,return");
-                return true;
-            }
-            if (isTransing()) {
-                Log.d(TAG, "onScroll: transing,return");
-                return true;
-            }
-            if (mScale <= 1) {
-                return true;
-            }
+
             mapRectInt();
             final Rect vRect = mViewRect;
             if (vRect.left <= mTempRect.left && vRect.right >= mTempRect.right) {
@@ -923,12 +977,25 @@ public class BeyondImageView extends ImageView {
             dx = -dx;
             dy = -dy;
 
-            //Log.d(TAG, "onScroll: dx=" + dx + ",dy=" + dy + ",tempRect=" + mTempRect + ",vrect=" + mViewRect);
+            Log.d(TAG, "onScroll: dx=" + dx + ",dy=" + dy + ",tempRect=" + mTempRect + ",vrect=" + mViewRect);
             if (dx < 0) {
-                getParent().requestDisallowInterceptTouchEvent(mTempRect.right > vRect.right);
+                getParent().requestDisallowInterceptTouchEvent((mTempRect.right > vRect.right));
             } else {
-                getParent().requestDisallowInterceptTouchEvent(mTempRect.left < vRect.left);
+                getParent().requestDisallowInterceptTouchEvent((mTempRect.left < vRect.left));
             }
+
+            if (isScaling()) {
+                Log.d(TAG, "onScroll: scaling,return");
+                return true;
+            }
+            if (isTransing()) {
+                Log.d(TAG, "onScroll: transing,return");
+                return true;
+            }
+            if (mScale <= 1) {
+                return true;
+            }
+
             mTempRect.offset(dx, dy);
 
             int maxLeft;
