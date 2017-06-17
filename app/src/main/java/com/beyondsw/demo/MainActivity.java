@@ -176,10 +176,34 @@ public class MainActivity extends AppCompatActivity {
             container.removeView(view);
         }
 
-        @Override
-        public void onRequestDisallowInterceptTouchEvent(BeyondImageView imageView, boolean disallow) {
-            Log.d(TAG, "onRequestDisallowInterceptTouchEvent: disallow=" + disallow);
+        boolean mStolen;
 
+        @Override
+        public void onStolenTouch(BeyondImageView imageView, boolean stolen) {
+            if (mStolen == stolen) {
+                return;
+            }
+            mStolen = stolen;
+            if (!stolen) {
+                if (mField == null) {
+                    try {
+                        mField = mImagePager.getClass().getDeclaredField("mLastMotionX");
+                        mField2 = mImagePager.getClass().getDeclaredField("mInitialMotionX");
+                        mField.setAccessible(true);
+                        mField2.setAccessible(true);
+                    } catch (NoSuchFieldException e) {
+                        e.printStackTrace();
+                    }
+                }
+
+                try {
+                    mField.set(mImagePager, imageView.getTouchX());
+                    mField2.set(mImagePager, imageView.getTouchX());
+                    Log.d(TAG, "onStolenTouch: set x=" + imageView.getTouchX());
+                } catch (IllegalAccessException e) {
+                    e.printStackTrace();
+                }
+            }
         }
 
         @Override
@@ -202,6 +226,14 @@ public class MainActivity extends AppCompatActivity {
             if (mImagePager.isFakeDragging()) {
                 mImagePager.endFakeDrag();
             }
+        }
+
+        Field mField;
+        Field mField2;
+
+        @Override
+        public void onMove(float x) {
+
         }
 
         @Override

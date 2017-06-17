@@ -1803,6 +1803,7 @@ public class ViewPager extends ViewGroup {
                         canScroll(this, false, (int) dx, (int) x, (int) y)) {
                     // Nested view has scrollable area under this point. Let it be handled there.
                     mLastMotionX = x;
+                    Log.d("BeyondImageView-demo", "onInterceptTouchEvent: mLastMotionX="+mLastMotionX);
                     mLastMotionY = y;
                     mIsUnableToDrag = true;
                     return false;
@@ -1814,6 +1815,8 @@ public class ViewPager extends ViewGroup {
                     setScrollState(SCROLL_STATE_DRAGGING);
                     mLastMotionX = dx > 0 ? mInitialMotionX + mTouchSlop :
                             mInitialMotionX - mTouchSlop;
+                    Log.d("BeyondImageView-demo", "onInterceptTouchEvent2: mLastMotionX="+mLastMotionX);
+
                     mLastMotionY = y;
                     setScrollingCacheEnabled(true);
                 } else if (yDiff > mTouchSlop) {
@@ -1839,6 +1842,8 @@ public class ViewPager extends ViewGroup {
                  * ACTION_DOWN always refers to pointer index 0.
                  */
                 mLastMotionX = mInitialMotionX = ev.getX();
+                Log.d("BeyondImageView-demo", "onInterceptTouchEvent3: mLastMotionX="+mLastMotionX);
+
                 mLastMotionY = mInitialMotionY = ev.getY();
                 mActivePointerId = ev.getPointerId(0);
                 mIsUnableToDrag = false;
@@ -1917,6 +1922,8 @@ public class ViewPager extends ViewGroup {
 
                 // Remember where the motion event started
                 mLastMotionX = mInitialMotionX = ev.getX();
+                Log.d("BeyondImageView-demo", "onTouchEvent: mLastMotionX="+mLastMotionX);
+
                 mLastMotionY = mInitialMotionY = ev.getY();
                 mActivePointerId = ev.getPointerId(0);
                 break;
@@ -1936,6 +1943,8 @@ public class ViewPager extends ViewGroup {
                         requestParentDisallowInterceptTouchEvent(true);
                         mLastMotionX = x - mInitialMotionX > 0 ? mInitialMotionX + mTouchSlop :
                                 mInitialMotionX - mTouchSlop;
+                        Log.d("BeyondImageView-demo", "onTouchEvent2: mLastMotionX="+mLastMotionX);
+
                         mLastMotionY = y;
                         setScrollState(SCROLL_STATE_DRAGGING);
                         setScrollingCacheEnabled(true);
@@ -2016,10 +2025,14 @@ public class ViewPager extends ViewGroup {
     private boolean performDrag(float x) {
 
         final float deltaX = mLastMotionX - x;
+        Log.d("BeyondImageView-demo", "performDrag: x=" + x + ",mLastMotionX=" + mLastMotionX + ",deltaX=" + deltaX);
+
         mLastMotionX = x;
 
         float oldScrollX = getScrollX();
         float scrollX = oldScrollX + deltaX;
+
+
         final int width = getClientWidth();
 
         float leftBound = width * mFirstOffset;

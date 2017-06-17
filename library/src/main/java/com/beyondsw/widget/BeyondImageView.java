@@ -76,7 +76,8 @@ public class BeyondImageView extends ImageView {
 
     private List<Listener> mListeners;
 
-    private boolean mStolenTouch;
+    private float mTouchX;
+    private float mTouchY;
 
     public BeyondImageView(Context context) {
         this(context, null);
@@ -101,19 +102,21 @@ public class BeyondImageView extends ImageView {
     }
 
     public interface Listener {
-        void onRequestDisallowInterceptTouchEvent(BeyondImageView imageView, boolean disallow);
+        void onStolenTouch(BeyondImageView imageView, boolean stolen);
 
         void onScroll(BeyondImageView imageView, float dx, float dy);
 
         void onDown();
 
         void onUp();
+
+        void onMove(float x);
     }
 
     public static class SimpleListener implements Listener {
 
         @Override
-        public void onRequestDisallowInterceptTouchEvent(BeyondImageView imageView, boolean disallow) {
+        public void onStolenTouch(BeyondImageView imageView, boolean stolen) {
 
         }
 
@@ -131,6 +134,11 @@ public class BeyondImageView extends ImageView {
         public void onUp() {
 
         }
+
+        @Override
+        public void onMove(float x) {
+
+        }
     }
 
     public void addListener(Listener listener) {
@@ -143,6 +151,22 @@ public class BeyondImageView extends ImageView {
     public void removeListener(Listener listener) {
         if (mListeners != null) {
             mListeners.remove(listener);
+        }
+    }
+
+    private void notifyMove(float x){
+        if (mListeners != null) {
+            for (Listener listener : mListeners) {
+                listener.onMove(x);
+            }
+        }
+    }
+
+    private void notifyStolenTouch(boolean stolen){
+        if (mListeners != null) {
+            for (Listener listener : mListeners) {
+                listener.onStolenTouch(this,stolen);
+            }
         }
     }
 
@@ -377,6 +401,7 @@ public class BeyondImageView extends ImageView {
         Log.d(TAG, "onTouchEvent: action=" + action);
         if (action == MotionEvent.ACTION_DOWN) {
             getParent().requestDisallowInterceptTouchEvent(true);
+            notifyStolenTouch(true);
             if (mGestureDetector == null) {
                 initGestureDetector();
             }
@@ -384,9 +409,21 @@ public class BeyondImageView extends ImageView {
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
             animToEdgeIfNeeded();
         }
+
+        mTouchX = event.getX();
+        mTouchY = event.getY();
+
         mGestureDetector.onTouchEvent(event);
         mScaleGestureDetector.onTouchEvent(event);
         return true;
+    }
+
+    public float getTouchX(){
+        return mTouchX;
+    }
+
+    public float getTouchY(){
+        return mTouchY;
     }
 
     private void animToEdgeIfNeeded() {
@@ -978,11 +1015,17 @@ public class BeyondImageView extends ImageView {
             dy = -dy;
 
             Log.d(TAG, "onScroll: dx=" + dx + ",dy=" + dy + ",tempRect=" + mTempRect + ",vrect=" + mViewRect);
+            boolean stolen;
             if (dx < 0) {
-                getParent().requestDisallowInterceptTouchEvent((mTempRect.right > vRect.right));
+                getParent().requestDisallowInterceptTouchEvent(stolen=(mTempRect.right > vRect.right));
+                Log.d("BeyondImageView-demo", "onScroll-1: stolen="+stolen+",tempRect="+mTempRect+",vRect="+mViewRect);
             } else {
-                getParent().requestDisallowInterceptTouchEvent((mTempRect.left < vRect.left));
+                getParent().requestDisallowInterceptTouchEvent(stolen=(mTempRect.left < vRect.left));
+                Log.d("BeyondImageView-demo", "onScroll-2: stolen="+stolen+",tempRect="+mTempRect+",vRect="+mViewRect);
+
             }
+            notifyStolenTouch(stolen);
+            Log.d(TAG, "onScroll: stolen="+stolen);
 
             if (isScaling()) {
                 Log.d(TAG, "onScroll: scaling,return");
